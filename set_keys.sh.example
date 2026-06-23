@@ -1,0 +1,25 @@
+# ============================================================
+#  Copy this file to  set_keys.sh  and fill in your own values.
+#    cp set_keys.sh.example set_keys.sh
+#  set_keys.sh is git-ignored, so your real keys are never committed.
+# ============================================================
+
+# --- OpenAI (REQUIRED) — the assistant's brain ---
+export OPENAI_API_KEY="sk-REPLACE_ME"
+export OPENAI_MODEL="gpt-5.5"        # or gpt-4o / gpt-4o-mini
+
+# --- Razorpay (optional) — use TEST-mode keys (start with rzp_test_) ---
+export RAZORPAY_KEY_ID="rzp_test_REPLACE_ME"
+export RAZORPAY_KEY_SECRET="REPLACE_ME"
+# Path to the Razorpay MCP server binary you downloaded from
+# https://github.com/razorpay/razorpay-mcp-server/releases :
+export RAZORPAY_MCP_BIN="/full/path/to/razorpay-mcp-server"
+
+# --- Shopify (optional) — use a development store ---
+export MYSHOPIFY_DOMAIN="your-store.myshopify.com"
+export SHOPIFY_ACCESS_TOKEN="shpat_REPLACE_ME"
+# Path to shopify-mcp's entry file (after: npm install shopify-mcp):
+export SHOPIFY_MCP_JS="/full/path/to/node_modules/shopify-mcp/dist/index.js"
+
+# --- Accounting tools repo (optional; defaults to ../invoice-mcp) ---
+# export INVOICE_MCP_DIR="/full/path/to/invoice-mcp"
