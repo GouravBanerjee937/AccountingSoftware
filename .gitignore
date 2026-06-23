@@ -2,3 +2,6 @@ items.csv
 invoices.csv
 __pycache__/
 .DS_Store
+.venv/
+*.backup
+run_server logs

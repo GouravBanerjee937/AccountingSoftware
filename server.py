@@ -4,7 +4,7 @@ import csv
 import json
 import os
 from datetime import datetime
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -196,11 +196,26 @@ class Handler(SimpleHTTPRequestHandler):
         except json.JSONDecodeError:
             return self._error(400, 'invalid json')
 
+        if path == '/api/ask':
+            return self._ask(data)
         if path == '/api/items':
             return self._create_item(data)
         if path == '/api/invoices':
             return self._create_invoice(data)
         return self._error(404, 'not found')
+
+    def _ask(self, data):
+        """In-app assistant: forward the question to the OpenAI-powered agent."""
+        question = str(data.get('question', '') or '').strip()
+        if not question:
+            return self._error(400, 'question is required')
+        history = data.get('history') if isinstance(data.get('history'), list) else None
+        try:
+            import agent
+            result = agent.ask(question, history)
+        except Exception as e:  # never crash the server on an assistant problem
+            return self._json({'answer': None, 'error': f'assistant error: {e}'})
+        return self._json({'answer': result.get('answer'), 'error': result.get('error')})
 
     def do_DELETE(self):
         if not self._authorized():
@@ -405,4 +420,4 @@ if __name__ == '__main__':
     host = '0.0.0.0' if os.environ.get('PORT') else 'localhost'
     display_host = 'localhost' if host == 'localhost' else host
     print(f'Serving http://{display_host}:{port}  (Ctrl+C to stop)')
-    HTTPServer((host, port), Handler).serve_forever()
+    ThreadingHTTPServer((host, port), Handler).serve_forever()
