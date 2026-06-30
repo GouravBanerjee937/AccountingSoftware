@@ -20,6 +20,7 @@ from contextlib import AsyncExitStack
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.client.sse import sse_client
 
 # Accounting tools live in the sibling invoice-mcp project.
 _INVOICE_MCP_DIR = os.environ.get(
@@ -36,6 +37,24 @@ SHOPIFY_JS = os.environ.get(
     "SHOPIFY_MCP_JS",
     "/Users/gourav/Work/shopify-mcp-pkg/node_modules/shopify-mcp/dist/index.js",
 )
+QBO_JS = os.environ.get(
+    "QUICKBOOKS_MCP_JS",
+    "/Users/gourav/Work/quickbooks-online-mcp-server/dist/index.js",
+)
+# The original (community) Zoho Books MCP server — pip package "zoho-books-mcp"
+# (github.com/kkeeling/zoho-mcp), installed in its own venv at ../zoho-mcp with a
+# pinned mcp version, launched over stdio.
+ZOHO_MCP_BIN = os.environ.get(
+    "ZOHO_MCP_BIN", "/Users/gourav/Work/zoho-mcp/.venv/bin/zoho-books-mcp")
+# The official PayPal MCP server — npm package "@paypal/mcp", launched over stdio.
+PAYPAL_JS = os.environ.get(
+    "PAYPAL_MCP_JS",
+    "/Users/gourav/Work/paypal-mcp-pkg/node_modules/@paypal/mcp/dist/index.js",
+)
+# The official TaxBandits MCP server — a REMOTE/hosted server over SSE (HTTP), not
+# a local stdio process. Sandbox base by default; override for production.
+TAXBANDITS_SSE_URL = os.environ.get(
+    "TAXBANDITS_MCP_URL", "https://testapi-aimcp.taxbandits.com/sse")
 
 
 def _is_set(v):
@@ -64,6 +83,72 @@ def _shopify_server():
     else:
         return None
     return StdioServerParameters(command="node", args=args, env=dict(os.environ))
+
+
+def _qbo_env_configured() -> bool:
+    """The QuickBooks server reads its own .env (via dotenv). Only start it when
+    that .env has real values, not the PASTE_..._HERE placeholders."""
+    env_path = os.path.join(os.path.dirname(QBO_JS), "..", ".env")
+    if not os.path.exists(env_path):
+        return False
+    needed = {"QUICKBOOKS_CLIENT_ID", "QUICKBOOKS_CLIENT_SECRET",
+              "QUICKBOOKS_REALM_ID", "QUICKBOOKS_REFRESH_TOKEN"}
+    found = set()
+    try:
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k, v = k.strip(), v.strip().strip('"').strip("'")
+                placeholder = (not v) or any(
+                    p in v for p in ("REPLACE", "PASTE", "your_", "will_be_filled"))
+                if k in needed and not placeholder:
+                    found.add(k)
+    except OSError:
+        return False
+    return needed <= found
+
+
+def _quickbooks_server():
+    if os.path.exists(QBO_JS) and _qbo_env_configured():
+        # The server loads its credentials from its own .env; we just launch it.
+        return StdioServerParameters(command="node", args=[QBO_JS], env=dict(os.environ))
+    return None
+
+
+def _zohobooks_server():
+    needed = (
+        os.environ.get("ZOHO_CLIENT_ID"), os.environ.get("ZOHO_CLIENT_SECRET"),
+        os.environ.get("ZOHO_REFRESH_TOKEN"), os.environ.get("ZOHO_ORGANIZATION_ID"),
+    )
+    if os.path.exists(ZOHO_MCP_BIN) and all(_is_set(v) for v in needed):
+        return StdioServerParameters(command=ZOHO_MCP_BIN, args=["--stdio"], env=dict(os.environ))
+    return None
+
+
+def _paypal_server():
+    token = os.environ.get("PAYPAL_ACCESS_TOKEN")
+    environment = os.environ.get("PAYPAL_ENVIRONMENT", "SANDBOX")
+    if _is_set(token) and os.path.exists(PAYPAL_JS):
+        return StdioServerParameters(
+            command="node",
+            args=[PAYPAL_JS, f"--access-token={token}", "--tools=all",
+                  f"--paypal-environment={environment}"],
+            env=dict(os.environ))
+    return None
+
+
+def _taxbandits_server():
+    """Remote SSE server. Auth is passed inline in the URL as
+    `?authentication=<User_ID>,<MCP_APIKey>` per TaxBandits' MCP docs."""
+    uid = os.environ.get("TAXBANDITS_USER_ID")
+    apikey = os.environ.get("TAXBANDITS_MCP_APIKEY")
+    if _is_set(uid) and _is_set(apikey):
+        return {"transport": "sse",
+                "url": f"{TAXBANDITS_SSE_URL}?authentication={uid},{apikey}"}
+    return None
 
 
 # --- Accounting tools (local functions) ---
@@ -104,8 +189,17 @@ SYSTEM = (
     "each via its own tools:\n"
     "  1) Local accounting — this app's own inventory items and invoices (list_/get_/create_invoice).\n"
     "  2) Razorpay — payments, orders, refunds, payment links, settlements, payouts (fetch_*/create_* tools).\n"
-    "  3) Shopify — your online store's products, orders, customers, inventory (get-*/create-* tools).\n\n"
+    "  3) Shopify — your online store's products, orders, customers, inventory (get-*/create-* tools).\n"
+    "  4) QuickBooks Online — full accounting: customers, invoices, bills, items, payments, and "
+    "financial reports (get_*/search_*/create_* tools for each entity).\n"
+    "  5) Zoho Books — accounting: organizations, items, contacts (customers/vendors), and invoices "
+    "(list_*/get_*/create_invoice tools).\n"
+    "  6) TaxBandits — US IRS e-filing: businesses, W-9 collection, and 1099-NEC forms "
+    "(create_business, request_w9_by_email/get_w9/list_w9, create_/validate_/transmit_1099_nec). "
+    "This is US tax only — it does NOT handle Indian GST.\n\n"
     "Rules:\n"
+    "- These are separate books. Keep the local app, QuickBooks, and Zoho Books straight — don't mix "
+    "an invoice from one with another. Ask which system the user means if it's ambiguous.\n"
     "- Answer ONLY from tool results. Never invent numbers, ids, or amounts. Relay tool errors plainly.\n"
     "- To COUNT or TOTAL things (products, orders, customers, payments), call the listing tool with a "
     "HIGH limit (e.g. limit 250) and count the actual rows returned. NEVER guess or estimate a count "
@@ -140,24 +234,37 @@ async def _ask_async(question, history):
     from openai import OpenAI
     client = OpenAI()
 
-    servers = [("razorpay", _razorpay_server()), ("shopify", _shopify_server())]
+    servers = [("razorpay", _razorpay_server()), ("shopify", _shopify_server()),
+               ("quickbooks", _quickbooks_server()), ("zohobooks", _zohobooks_server()),
+               ("paypal", _paypal_server()), ("taxbandits", _taxbandits_server())]
     servers = [(label, p) for label, p in servers if p is not None]
 
     async with AsyncExitStack() as stack:
         tools = list(LOCAL_SCHEMAS)
-        route = {}  # tool name -> the MCP session that owns it
+        route = {}  # exposed tool name -> (MCP session, real tool name on that server)
+        used = set(LOCAL_FUNCS)  # names already taken (local tools win the bare name)
         for label, params in servers:
             try:
-                read, write = await stack.enter_async_context(stdio_client(params))
+                # Remote servers (TaxBandits) arrive as an {"transport":"sse"} marker;
+                # everyone else is a local stdio process.
+                if isinstance(params, dict) and params.get("transport") == "sse":
+                    read, write = await stack.enter_async_context(sse_client(params["url"]))
+                else:
+                    read, write = await stack.enter_async_context(stdio_client(params))
                 session = await stack.enter_async_context(ClientSession(read, write))
                 await session.initialize()
                 for t in (await session.list_tools()).tools:
-                    route[t.name] = session
+                    # Several accounting backends share names (get_invoice, create_invoice…).
+                    # Prefix with the server label whenever the bare name is already taken,
+                    # so the model can address each system unambiguously.
+                    exposed = t.name if t.name not in used else f"{label}__{t.name}"
+                    used.add(exposed)
+                    route[exposed] = (session, t.name)
                     schema = t.inputSchema or {"type": "object", "properties": {}}
                     if "type" not in schema:
                         schema = {"type": "object", "properties": schema.get("properties", {})}
                     tools.append({"type": "function", "function": {
-                        "name": t.name, "description": (t.description or t.name)[:1024],
+                        "name": exposed, "description": (t.description or t.name)[:1024],
                         "parameters": schema}})
             except Exception as e:
                 # One bad server shouldn't kill the others; note it and continue.
@@ -195,7 +302,8 @@ async def _ask_async(question, history):
                     if name in LOCAL_FUNCS:
                         content = json.dumps(LOCAL_FUNCS[name](**args), default=str)
                     elif name in route:
-                        content = _mcp_text(await route[name].call_tool(name, args))
+                        session, real_name = route[name]
+                        content = _mcp_text(await session.call_tool(real_name, args))
                     else:
                         content = json.dumps({"error": f"tool {name} is not available right now"})
                 except Exception as e:

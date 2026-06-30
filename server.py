@@ -1,8 +1,11 @@
 """Small static + JSON API server backing index.html with CSV persistence."""
 
+import base64
 import csv
 import json
 import os
+import re
+import urllib.request
 from datetime import datetime
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -12,6 +15,17 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get('DATA_DIR', ROOT)
 ITEMS_CSV = os.path.join(DATA_DIR, 'items.csv')
 INVOICES_CSV = os.path.join(DATA_DIR, 'invoices.csv')
+DOCUMENTS_CSV = os.path.join(DATA_DIR, 'documents.csv')
+# Uploaded files (e.g. PDFs received over WhatsApp) live here and are served
+# statically at /uploads/<filename> by the default file handler.
+UPLOADS_DIR = os.path.join(DATA_DIR, 'uploads')
+# Per-document processing results (OCR / Qwen / GPT) live here as <id>.json.
+RESULTS_DIR = os.path.join(DATA_DIR, 'results')
+
+# Twilio credentials — only needed to download media from the Twilio WhatsApp
+# sandbox. Unset locally => media downloads that don't require auth still work.
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
 
 # Optional shared secret. When API_SECRET is set (e.g. in production), every
 # write request must send a matching "X-API-Key" header. Unset locally => open,
@@ -22,9 +36,14 @@ ITEMS_HEADER = ['id', 'name', 'qty', 'price']
 # Original 4 columns kept first (backward compatible); customer/status fields appended.
 INVOICES_HEADER = ['number', 'item_name', 'qty', 'price',
                    'customer_name', 'customer_email', 'due_date', 'status', 'notes']
+DOCUMENTS_HEADER = ['id', 'upload_datetime', 'name', 'doc_type', 'file']
 
 ALLOWED_STATUSES = ('unpaid', 'paid', 'overdue')
 DEFAULT_STATUS = 'unpaid'
+
+# Business document categories the user can classify a document as.
+DOC_TYPES = ('Sales Invoice', 'Purchase Invoice', 'Sales Return',
+             'Purchase Return', 'Credit Note', 'Debit Note')
 
 
 def valid_date(text):
@@ -70,6 +89,12 @@ def init_db():
             number TEXT, item_name TEXT, qty INTEGER, price DOUBLE PRECISION,
             customer_name TEXT, customer_email TEXT, due_date TEXT,
             status TEXT, notes TEXT)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS documents (
+            id INTEGER PRIMARY KEY,
+            upload_datetime TEXT NOT NULL,
+            name TEXT NOT NULL,
+            doc_type TEXT NOT NULL,
+            file TEXT NOT NULL DEFAULT '')""")
 
 
 # ---- CSV helpers (used in local mode) ----
@@ -170,6 +195,101 @@ def save_invoices(invoices):
     write_csv(INVOICES_CSV, INVOICES_HEADER, rows)
 
 
+def load_documents():
+    if USE_PG:
+        with _pg() as conn, conn.cursor() as cur:
+            cur.execute("""SELECT id, upload_datetime, name, doc_type, file
+                           FROM documents ORDER BY id""")
+            return [{'id': r[0], 'uploadDateTime': r[1] or '',
+                     'name': r[2] or '', 'docType': r[3] or '', 'file': r[4] or ''}
+                    for r in cur.fetchall()]
+    return [{'id': int(r['id']), 'uploadDateTime': r.get('upload_datetime', ''),
+             'name': r.get('name', ''), 'docType': r.get('doc_type', ''),
+             'file': r.get('file', '')}
+            for r in read_csv(DOCUMENTS_CSV, DOCUMENTS_HEADER)]
+
+
+def save_documents(documents):
+    if USE_PG:
+        with _pg() as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM documents")
+            cur.executemany(
+                """INSERT INTO documents (id, upload_datetime, name, doc_type, file)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                [(d['id'], d['uploadDateTime'], d['name'], d['docType'],
+                  d.get('file', '')) for d in documents])
+        return
+    rows = [{'id': d['id'], 'upload_datetime': d['uploadDateTime'],
+             'name': d['name'], 'doc_type': d['docType'],
+             'file': d.get('file', '')} for d in documents]
+    write_csv(DOCUMENTS_CSV, DOCUMENTS_HEADER, rows)
+
+
+def _result_path(doc_id):
+    return os.path.join(RESULTS_DIR, f'{int(doc_id)}.json')
+
+
+def load_result(doc_id):
+    """Return the stored {ocr, qwen, gpt} dict for a document (empty if none)."""
+    path = _result_path(doc_id)
+    if os.path.isfile(path):
+        with open(path, encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_result_field(doc_id, key, value):
+    """Merge one result field (ocr/qwen/gpt) into the document's result file."""
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    data = load_result(doc_id)
+    data[key] = value
+    with open(_result_path(doc_id), 'w', encoding='utf-8') as f:
+        json.dump(data, f)
+
+
+def add_document(name, doc_type, file=''):
+    """Append one document row. Upload date/time is stamped here, server-side.
+    Shared by the manual 'Add Document' form and the WhatsApp webhook."""
+    documents = load_documents()
+    next_id = max((d['id'] for d in documents), default=0) + 1
+    new_doc = {'id': next_id,
+               'uploadDateTime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+               'name': name, 'docType': doc_type, 'file': file}
+    documents.append(new_doc)
+    save_documents(documents)
+    return new_doc
+
+
+def _safe_filename(name):
+    """Reduce an arbitrary string to a filesystem-safe basename."""
+    base = os.path.basename(name or '').strip()
+    base = re.sub(r'[^A-Za-z0-9._-]', '_', base)
+    return base or 'file'
+
+
+class _StripAuthOnRedirect(urllib.request.HTTPRedirectHandler):
+    """Twilio media URLs 302-redirect to a CDN that rejects a second auth
+    mechanism — drop the Authorization header when following the redirect."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None:
+            new.headers = {k: v for k, v in new.headers.items()
+                           if k.lower() != 'authorization'}
+        return new
+
+
+def download_media(url):
+    """Fetch bytes from a media URL. Adds Twilio basic auth for twilio.com hosts."""
+    req = urllib.request.Request(url)
+    if 'twilio.com' in (urlparse(url).netloc or '') and TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+        cred = base64.b64encode(
+            f'{TWILIO_ACCOUNT_SID}:{TWILIO_AUTH_TOKEN}'.encode()).decode()
+        req.add_header('Authorization', 'Basic ' + cred)
+    opener = urllib.request.build_opener(_StripAuthOnRedirect)
+    with opener.open(req, timeout=30) as resp:
+        return resp.read()
+
+
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
@@ -177,6 +297,15 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(load_items())
         if path == '/api/invoices':
             return self._json(load_invoices())
+        if path == '/api/documents':
+            return self._json(load_documents())
+        if path == '/api/documents/result':
+            qs = parse_qs(urlparse(self.path).query)
+            try:
+                doc_id = int(qs.get('id', [''])[0])
+            except ValueError:
+                return self._error(400, 'invalid id')
+            return self._json(load_result(doc_id))
         return super().do_GET()
 
     def _authorized(self):
@@ -186,11 +315,23 @@ class Handler(SimpleHTTPRequestHandler):
         return self.headers.get('X-API-Key') == API_SECRET
 
     def do_POST(self):
-        if not self._authorized():
-            return self._error(401, 'unauthorized: missing or wrong X-API-Key')
         path = urlparse(self.path).path
         length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(length).decode('utf-8') if length else ''
+        raw = self.rfile.read(length) if length else b''
+
+        # Binary file upload (Scan): raw file bytes in the body, name/type in query.
+        if path == '/api/uploads':
+            return self._upload_file(raw)
+
+        body = raw.decode('utf-8', 'replace')
+
+        # WhatsApp (Twilio) webhook: form-encoded, authenticated by Twilio's own
+        # signature rather than our X-API-Key, so it runs before _authorized().
+        if path == '/webhook/whatsapp':
+            return self._whatsapp_webhook(body)
+
+        if not self._authorized():
+            return self._error(401, 'unauthorized: missing or wrong X-API-Key')
         try:
             data = json.loads(body) if body else {}
         except json.JSONDecodeError:
@@ -202,6 +343,16 @@ class Handler(SimpleHTTPRequestHandler):
             return self._create_item(data)
         if path == '/api/invoices':
             return self._create_invoice(data)
+        if path == '/api/documents':
+            return self._create_document(data)
+        if path == '/api/documents/ocr':
+            return self._ocr_document(data)
+        if path == '/api/documents/extract':
+            return self._extract_document(data)
+        if path == '/api/documents/extract-gpt':
+            return self._extract_gpt(data)
+        if path == '/api/documents/commit':
+            return self._commit_documents(data)
         return self._error(404, 'not found')
 
     def _ask(self, data):
@@ -243,6 +394,34 @@ class Handler(SimpleHTTPRequestHandler):
             deleted = len(invoices) - len(remaining)
             save_invoices(remaining)
             return self._json({'deleted': deleted, 'number': number})
+        if path == '/api/documents':
+            try:
+                doc_id = int(qs.get('id', [''])[0])
+            except ValueError:
+                return self._error(400, 'invalid id')
+            documents = load_documents()
+            doc = next((d for d in documents if d['id'] == doc_id), None)
+            if doc is None:
+                return self._error(404, 'document not found')
+            # Remove the stored file too, if any (keep uploads/ tidy).
+            rel = doc.get('file', '')
+            if rel:
+                fpath = os.path.join(DATA_DIR, rel)
+                if os.path.commonpath([os.path.abspath(fpath), UPLOADS_DIR]) == UPLOADS_DIR \
+                        and os.path.isfile(fpath):
+                    try:
+                        os.remove(fpath)
+                    except OSError as e:
+                        print(f'Could not remove {fpath}: {e}')
+            # Drop the stored results file too, if any.
+            rpath = _result_path(doc_id)
+            if os.path.isfile(rpath):
+                try:
+                    os.remove(rpath)
+                except OSError:
+                    pass
+            save_documents([d for d in documents if d['id'] != doc_id])
+            return self._json({'deleted': doc_id})
         return self._error(404, 'not found')
 
     def do_PUT(self):
@@ -259,7 +438,26 @@ class Handler(SimpleHTTPRequestHandler):
             return self._update_item(data)
         if path == '/api/invoices':
             return self._update_invoice(data)
+        if path == '/api/documents':
+            return self._update_document(data)
         return self._error(404, 'not found')
+
+    def _update_document(self, data):
+        """Re-classify a document's type to one of the allowed DOC_TYPES."""
+        try:
+            doc_id = int(data['id'])
+        except (KeyError, ValueError, TypeError):
+            return self._error(400, 'a valid document id is required')
+        doc_type = str(data.get('docType', '') or '').strip()
+        if doc_type not in DOC_TYPES:
+            return self._error(400, f'document type must be one of: {", ".join(DOC_TYPES)}')
+        documents = load_documents()
+        doc = next((d for d in documents if d['id'] == doc_id), None)
+        if doc is None:
+            return self._error(404, 'document not found')
+        doc['docType'] = doc_type
+        save_documents(documents)
+        return self._json(doc)
 
     def _update_item(self, data):
         """Update an existing item's name/qty/price by id. Only provided fields change."""
@@ -398,6 +596,167 @@ class Handler(SimpleHTTPRequestHandler):
 
         return self._json({'invoice': new_invoice, 'item': item}, status=201)
 
+    def _create_document(self, data):
+        name = str(data.get('name', '') or '').strip()
+        doc_type = str(data.get('docType', '') or '').strip()
+        if not name:
+            return self._error(400, 'document name is required')
+        if not doc_type:
+            return self._error(400, 'document type is required')
+
+        return self._json(add_document(name, doc_type), status=201)
+
+    # File extensions accepted by the Scan upload (PDFs and images).
+    _UPLOAD_EXTS = {'.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff'}
+
+    def _upload_file(self, raw):
+        """Stage one uploaded file (PDF/image) into uploads/. Does NOT create a
+        document row yet — that happens on commit. Returns per-file status."""
+        qs = parse_qs(urlparse(self.path).query)
+        name = (qs.get('name', [''])[0] or 'file').strip()
+        ctype = qs.get('type', [''])[0]
+        ext = os.path.splitext(name)[1].lower()
+        is_ok_type = (ext in self._UPLOAD_EXTS
+                      or ctype == 'application/pdf' or ctype.startswith('image/'))
+        if not is_ok_type:
+            return self._json({'ok': False, 'name': name, 'size': len(raw),
+                               'error': 'unsupported file type (PDF/images only)'})
+        if not raw:
+            return self._json({'ok': False, 'name': name, 'size': 0, 'error': 'empty file'})
+
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+        stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        stored = _safe_filename(f'scan_{stamp}_{name}')
+        with open(os.path.join(UPLOADS_DIR, stored), 'wb') as f:
+            f.write(raw)
+        return self._json({'ok': True, 'name': name, 'size': len(raw),
+                           'file': f'uploads/{stored}'})
+
+    def _commit_documents(self, data):
+        """Create document rows for the successfully-uploaded (staged) files."""
+        doc_type = str(data.get('docType', '') or '').strip()
+        files = data.get('files') or []
+        created = []
+        for f in files:
+            name = str(f.get('name', '') or '').strip()
+            rel = str(f.get('file', '') or '').strip()
+            # Only accept references that point inside uploads/ (no traversal).
+            if not name or not rel.startswith('uploads/') or '..' in rel:
+                continue
+            if not os.path.isfile(os.path.join(DATA_DIR, rel)):
+                continue
+            created.append(add_document(name, doc_type, file=rel))
+        return self._json({'created': created}, status=201)
+
+    def _ocr_document(self, data):
+        """Run OCR on a document's stored file via the PP-OCRv5 demo."""
+        try:
+            doc_id = int(data['id'])
+        except (KeyError, ValueError, TypeError):
+            return self._error(400, 'a valid document id is required')
+        documents = load_documents()
+        doc = next((d for d in documents if d['id'] == doc_id), None)
+        if doc is None:
+            return self._error(404, 'document not found')
+        rel = doc.get('file', '')
+        if not rel:
+            return self._error(400, 'this document has no file to OCR')
+        fpath = os.path.join(DATA_DIR, rel)
+        if not os.path.isfile(fpath):
+            return self._error(404, 'file not found on server')
+        try:
+            import paddle_ocr
+            text = paddle_ocr.ocr_file(fpath)
+        except Exception as e:  # cold start / queue / network — report, don't crash
+            return self._json({'text': None, 'error': f'OCR service error: {e}'})
+        save_result_field(doc_id, 'ocr', text)
+        return self._json({'text': text})
+
+    def _extract_document(self, data):
+        """Send OCR text to Qwen with a system prompt chosen by document type."""
+        return self._llm_extract(data, engine='qwen')
+
+    def _extract_gpt(self, data):
+        """Send OCR text to gpt-4.1-mini with the same per-type system prompt."""
+        return self._llm_extract(data, engine='gpt')
+
+    def _llm_extract(self, data, engine):
+        """Shared extraction: pick the system prompt by document type, run the
+        chosen engine on the OCR text, store the result under its key."""
+        doc_type = str(data.get('docType', '') or '').strip()
+        text = str(data.get('text', '') or '').strip()
+        doc_id = data.get('id')
+        if not text:
+            return self._error(400, 'no OCR text provided to extract')
+
+        import doc_prompts
+        system = doc_prompts.get_system_prompt(doc_type)
+        if not system:
+            return self._json({'response': None,
+                               'error': f'No system prompt configured for document type "{doc_type}".'})
+        try:
+            if engine == 'gpt':
+                import gpt_client
+                response = gpt_client.chat(system, text)
+            else:
+                import qwen_client
+                response = qwen_client.chat(system, text)
+        except Exception as e:  # model unreachable / error — report, don't crash
+            return self._json({'response': None, 'error': f'{engine} error: {e}'})
+        if doc_id is not None:
+            save_result_field(doc_id, engine, response)
+        return self._json({'response': response})
+
+    def _whatsapp_webhook(self, body):
+        """Inbound Twilio WhatsApp message. Saves any attached files (e.g. PDFs)
+        to uploads/ and records each as a document. Always replies 200 + TwiML
+        so Twilio doesn't retry."""
+        form = parse_qs(body)
+        def field(key):
+            return form.get(key, [''])[0]
+
+        try:
+            num_media = int(field('NumMedia') or 0)
+        except ValueError:
+            num_media = 0
+        caption = field('Body').strip()
+
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+        saved = 0
+        for i in range(num_media):
+            url = field(f'MediaUrl{i}')
+            ctype = field(f'MediaContentType{i}')  # e.g. 'application/pdf'
+            if not url:
+                continue
+            try:
+                content = download_media(url)
+            except Exception as e:
+                print(f'WhatsApp: failed to download media {i}: {e}')
+                continue
+
+            subtype = ctype.split('/')[-1] if '/' in ctype else (ctype or 'bin')
+            stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            stored = _safe_filename(f'wa_{stamp}_{i}.{subtype}')
+            with open(os.path.join(UPLOADS_DIR, stored), 'wb') as f:
+                f.write(content)
+
+            # Document name: the WhatsApp caption if any, else the stored name.
+            name = caption or stored
+            add_document(name, subtype, file=f'uploads/{stored}')
+            saved += 1
+
+        print(f'WhatsApp webhook: {saved}/{num_media} media saved (from {field("From")})')
+        return self._twiml()
+
+    def _twiml(self):
+        """Empty TwiML reply — tells Twilio the message was handled."""
+        body = b'<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/xml; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _json(self, data, status=200):
         body = json.dumps(data).encode('utf-8')
         self.send_response(status)
@@ -413,6 +772,8 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == '__main__':
     os.chdir(ROOT)
+    os.makedirs(UPLOADS_DIR, exist_ok=True)  # where WhatsApp PDFs land
+    os.makedirs(RESULTS_DIR, exist_ok=True)  # where OCR/Qwen/GPT results land
     init_db()  # create Postgres tables on first hosted boot (no-op in CSV mode)
     # When PORT is set (e.g. on Render/Fly/Railway) bind publicly; otherwise
     # only bind to localhost for local development.

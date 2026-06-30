@@ -1,3 +1,4 @@
 # Local mode (CSV) needs nothing extra — only the Python standard library.
 # Hosted mode (Postgres, when DATABASE_URL is set) needs the psycopg driver:
 psycopg[binary]>=3.1
+gradio_client

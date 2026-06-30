@@ -1,8 +1,14 @@
 items.csv
 invoices.csv
+documents.csv
 __pycache__/
 .DS_Store
 .venv/
 *.backup
+*.bak
 run_server logs
 set_keys.sh
+set_keys.sh.bak
+# User-uploaded documents and their extracted results (personal data)
+uploads/
+results/

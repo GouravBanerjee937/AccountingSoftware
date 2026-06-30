@@ -35,6 +35,22 @@
     }
     .nav a:hover { background: #1f2937; color: #fff; }
     .nav a.active { background: #1f2937; color: #fff; }
+    .nav-dropdown { position: relative; display: inline-block; }
+    .nav-dropbtn {
+      background: transparent; border: none; color: #d1d5db; cursor: pointer;
+      padding: 0.375rem 0.75rem; font-size: 0.9375rem; border-radius: 6px;
+    }
+    .nav-dropbtn:hover { background: #1f2937; color: #fff; }
+    .nav-dropdown-menu {
+      display: none; position: absolute; top: 100%; left: 0; margin-top: 4px;
+      background: #1f2937; border-radius: 6px; min-width: 180px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35); z-index: 50; overflow: hidden;
+    }
+    .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+    .nav-dropdown-menu a {
+      display: block; padding: 0.6rem 1rem; color: #d1d5db; border-radius: 0;
+    }
+    .nav-dropdown-menu a:hover { background: #374151; color: #fff; }
     .nav .logout-link {
       background: transparent; color: #d1d5db; border: none;
       cursor: pointer; font-size: 0.9375rem; padding: 0.375rem 0.5rem;
@@ -138,8 +154,17 @@
 <body>
   <nav class="nav">
     <span class="brand">Invoice App</span>
+    <a href="#/home" data-route="#/home">Home</a>
     <a href="#/items" data-route="#/items">Item Master</a>
     <a href="#/invoices" data-route="#/invoices">Invoice Creation</a>
+    <div class="nav-dropdown">
+      <button class="nav-dropbtn" type="button">Invoices ▾</button>
+      <div class="nav-dropdown-menu">
+        <a href="#/sales-invoice" data-route="#/sales-invoice">Sales Invoice</a>
+        <a href="#/purchase-invoice" data-route="#/purchase-invoice">Purchase Invoice</a>
+      </div>
+    </div>
+    <a href="#/documents" data-route="#/documents">Documents</a>
     <button class="logout-link" id="logout-btn" type="button">Logout</button>
   </nav>
 
@@ -159,6 +184,33 @@
 
           <button class="full" type="submit">Login</button>
         </form>
+      </div>
+    </section>
+
+    <!-- Home -->
+    <section id="home-page" class="page">
+      <div class="card">
+        <div class="header-row"><h1>Home</h1></div>
+        <p style="color:#4b5563; margin-top:0;">Scan PDFs and images from your computer to add them to the Documents page.</p>
+        <button id="home-scan-btn" type="button">Scan</button>
+      </div>
+    </section>
+
+    <!-- Sales Invoice (scan) -->
+    <section id="sales-invoice-page" class="page">
+      <div class="card">
+        <div class="header-row"><h1>Sales Invoice</h1></div>
+        <p style="color:#4b5563; margin-top:0;">Scan sales invoices to add them to the Documents page.</p>
+        <button id="sales-scan-btn" type="button">Scan</button>
+      </div>
+    </section>
+
+    <!-- Purchase Invoice (scan) -->
+    <section id="purchase-invoice-page" class="page">
+      <div class="card">
+        <div class="header-row"><h1>Purchase Invoice</h1></div>
+        <p style="color:#4b5563; margin-top:0;">Scan purchase invoices to add them to the Documents page.</p>
+        <button id="purchase-scan-btn" type="button">Scan</button>
       </div>
     </section>
 
@@ -285,33 +337,128 @@
         </form>
       </div>
     </section>
+
+    <!-- Documents -->
+    <section id="documents-page" class="page">
+      <div class="card wide">
+        <div class="header-row">
+          <h1>Documents</h1>
+          <button id="new-document-btn" type="button">Add Document</button>
+        </div>
+        <div class="table-wrap">
+        <table id="documents-table">
+          <thead>
+            <tr>
+              <th>Upload Date and Time</th>
+              <th>Document Name</th>
+              <th>Document Type</th>
+              <th>Result</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="documents-tbody"></tbody>
+        </table>
+        </div>
+        <div id="documents-empty" class="empty">No documents yet. Click "Add Document" to add one.</div>
+      </div>
+    </section>
+
+    <!-- New Document form -->
+    <section id="new-document-page" class="page">
+      <div class="card">
+        <div class="header-row"><h1>Add Document</h1></div>
+        <form id="new-document-form">
+          <label for="document-name">Document name</label>
+          <input id="document-name" type="text" required />
+
+          <label for="document-type">Document type</label>
+          <input id="document-type" type="text" placeholder="e.g. Invoice, Receipt, Contract" required />
+
+          <div class="row">
+            <button class="secondary" type="button" id="document-cancel-btn">Cancel</button>
+            <button type="submit">Submit</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <!-- Hidden file picker used by every Scan button -->
+  <input type="file" id="scan-input" multiple accept=".pdf,image/*" style="display:none">
+
+  <!-- Scan & Upload popup -->
+  <div id="scan-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Scan &amp; Upload</h3>
+        <button id="scan-modal-close" class="modal-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body" style="white-space:normal;">
+        <table>
+          <thead><tr><th>File name</th><th>Size</th><th>Status</th></tr></thead>
+          <tbody id="scan-tbody"></tbody>
+        </table>
+      </div>
+      <div class="modal-foot">
+        <button id="scan-save-btn" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Document processing / result popup (must exist before the script below references it) -->
+  <div id="ocr-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="ocr-modal-title">Document Processing</h3>
+        <button id="ocr-modal-close" class="modal-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-tabs">
+        <button class="modal-tab active" type="button" data-tab="ocr">OCR</button>
+        <button class="modal-tab" type="button" data-tab="qwen">Qwen</button>
+        <button class="modal-tab" type="button" data-tab="gpt">GPT</button>
+      </div>
+      <div id="ocr-modal-step" class="modal-step"></div>
+      <pre id="ocr-modal-body" class="modal-body"></pre>
+    </div>
   </div>
 
   <script>
     const routes = {
       '#/login': 'login-page',
+      '#/home': 'home-page',
+      '#/sales-invoice': 'sales-invoice-page',
+      '#/purchase-invoice': 'purchase-invoice-page',
       '#/items': 'items-page',
       '#/items/new': 'new-item-page',
       '#/invoices': 'invoice-page',
       '#/invoices/new': 'create-invoice-page',
+      '#/documents': 'documents-page',
+      '#/documents/new': 'new-document-page',
     };
-    const protectedRoutes = ['#/items', '#/items/new', '#/invoices', '#/invoices/new'];
+    const protectedRoutes = ['#/home', '#/sales-invoice', '#/purchase-invoice', '#/items', '#/items/new', '#/invoices', '#/invoices/new', '#/documents', '#/documents/new'];
+
+    // Business document categories the user can classify a document as.
+    const DOC_TYPES = ['Sales Invoice', 'Purchase Invoice', 'Sales Return',
+                       'Purchase Return', 'Credit Note', 'Debit Note'];
 
     const state = {
       user: null,
       route: '#/login',
       items: [],         // [{id, name, qty, price}]
       invoices: [],      // [{number, itemName, qty, price}]
+      documents: [],     // [{id, uploadDateTime, name, docType}]
     };
 
     async function loadFromServer() {
       try {
-        const [items, invoices] = await Promise.all([
+        const [items, invoices, documents] = await Promise.all([
           fetch('/api/items').then(r => r.json()),
           fetch('/api/invoices').then(r => r.json()),
+          fetch('/api/documents').then(r => r.json()),
         ]);
         state.items = Array.isArray(items) ? items : [];
         state.invoices = Array.isArray(invoices) ? invoices : [];
+        state.documents = Array.isArray(documents) ? documents : [];
       } catch (e) {
         console.error('Failed to load data from server:', e);
       }
@@ -347,6 +494,7 @@
         renderInvoicesTable();
       }
       if (pageId === 'items-page') renderItemsTable();
+      if (pageId === 'documents-page') renderDocumentsTable();
       if (pageId === 'create-invoice-page') {
         renderItemsDropdown();
         document.getElementById('invoice-error').style.display = 'none';
@@ -378,6 +526,212 @@
         const priceTd = document.createElement('td'); priceTd.textContent = Number(item.price).toFixed(2);
         tr.append(nameTd, qtyTd, priceTd);
         tbody.appendChild(tr);
+      }
+    }
+
+    function renderDocumentsTable() {
+      const tbody = document.getElementById('documents-tbody');
+      const empty = document.getElementById('documents-empty');
+      const table = document.getElementById('documents-table');
+      tbody.innerHTML = '';
+      // Keep the table (with its column headers) visible at all times; only the
+      // "No documents yet" note toggles. This stops the whole table vanishing
+      // when the last row is deleted.
+      table.style.display = '';
+      empty.style.display = state.documents.length === 0 ? 'block' : 'none';
+      for (const doc of state.documents) {
+        const tr = document.createElement('tr');
+        const dtTd = document.createElement('td'); dtTd.textContent = doc.uploadDateTime || '—';
+        const nameTd = document.createElement('td'); nameTd.textContent = doc.name;
+
+        // Document Type is a dropdown of the business categories. If the current
+        // value isn't one of them (e.g. raw 'pdf'/'jpeg' from WhatsApp), a
+        // "Select type…" placeholder is shown so the user must choose.
+        const typeTd = document.createElement('td');
+        const sel = document.createElement('select');
+        sel.style.cssText = 'width:auto; margin:0; min-width:170px;';
+        if (!DOC_TYPES.includes(doc.docType)) {
+          const ph = document.createElement('option');
+          ph.value = '';
+          ph.textContent = 'Select type…';
+          ph.selected = true;
+          sel.appendChild(ph);
+        }
+        DOC_TYPES.forEach(t => {
+          const o = document.createElement('option');
+          o.value = t; o.textContent = t;
+          if (t === doc.docType) o.selected = true;
+          sel.appendChild(o);
+        });
+        typeTd.appendChild(sel);
+
+        // Result column — opens the tabbed popup with stored OCR/Qwen/GPT output.
+        const resultTd = document.createElement('td');
+        const resultBtn = document.createElement('button');
+        resultBtn.type = 'button';
+        resultBtn.textContent = 'Result';
+        resultBtn.addEventListener('click', () => showResult(doc.id));
+        resultTd.appendChild(resultBtn);
+
+        const actionTd = document.createElement('td');
+        if (doc.file) {
+          const view = document.createElement('a');
+          view.href = '/' + doc.file;
+          view.textContent = 'View';
+          view.target = '_blank';
+          view.rel = 'noopener';
+          view.style.marginRight = '0.75rem';
+          actionTd.appendChild(view);
+        }
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.textContent = 'Save';
+        saveBtn.style.marginRight = '0.5rem';
+        saveBtn.addEventListener('click', () => saveDocumentType(doc.id, sel.value, saveBtn));
+        actionTd.appendChild(saveBtn);
+        const delBtn = document.createElement('button');
+        delBtn.className = 'secondary';
+        delBtn.type = 'button';
+        delBtn.textContent = 'Delete';
+        delBtn.addEventListener('click', () => deleteDocument(doc.id));
+        actionTd.appendChild(delBtn);
+        tr.append(dtTd, nameTd, typeTd, resultTd, actionTd);
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function saveDocumentType(id, docType, btn) {
+      if (!docType) { alert('Please choose a document type first.'); return; }
+      // 1. Save the chosen type.
+      try {
+        const res = await fetch('/api/documents', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, docType }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'save failed');
+        const updated = await res.json();
+        const d = state.documents.find(x => x.id === id);
+        if (d) d.docType = updated.docType;
+        if (btn) {
+          const original = btn.textContent;
+          btn.textContent = 'Saved ✓';
+          setTimeout(() => { btn.textContent = original; }, 1200);
+        }
+      } catch (err) {
+        alert('Failed to save document type: ' + err.message);
+        return;
+      }
+      // 2. Then run the pipeline: OCR -> Qwen extraction. Result shown in popup.
+      runPipeline(id, docType);
+    }
+
+    // --- Tabbed result/processing popup ---
+    // The popup has 3 tabs (OCR / Qwen / GPT). Contents live here; the active
+    // tab is rendered into the body. Same modal is used by Save (live pipeline)
+    // and by the Result button (stored results).
+    const modalContent = { ocr: '', qwen: '', gpt: '' };
+    let activeTab = 'ocr';
+
+    function renderModalTab() {
+      document.querySelectorAll('.modal-tab').forEach(b =>
+        b.classList.toggle('active', b.dataset.tab === activeTab));
+      document.getElementById('ocr-modal-body').textContent = modalContent[activeTab] || '';
+    }
+    function setTabContent(tab, text) {
+      modalContent[tab] = text;
+      if (tab === activeTab) renderModalTab();
+    }
+    function openModal(title, initialTab) {
+      document.getElementById('ocr-modal-title').textContent = title;
+      activeTab = initialTab || 'ocr';
+      document.getElementById('ocr-modal').classList.add('open');
+      renderModalTab();
+    }
+    function setStep(text) {
+      const step = document.getElementById('ocr-modal-step');
+      if (!text) { step.classList.remove('show'); step.innerHTML = ''; return; }
+      step.classList.add('show');
+      step.innerHTML = '<span class="modal-spinner"></span><span class="modal-step-text"></span>';
+      step.querySelector('.modal-step-text').textContent = text;
+    }
+
+    // Save flow: run OCR -> Qwen -> GPT, filling each tab as it completes.
+    async function runPipeline(id, docType) {
+      modalContent.ocr = '⏳ Running OCR…';
+      modalContent.qwen = '⏳ Waiting for OCR…';
+      modalContent.gpt = '⏳ Waiting for OCR…';
+      openModal('Document Processing', 'ocr');
+
+      // STEP 1 — OCR the document's file via PP-OCRv5.
+      setStep('Step 1 of 3 · Running OCR (PP-OCRv5)…');
+      let ocrText = '';
+      try {
+        const res = await fetch('/api/documents/ocr', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.error) { setStep(''); setTabContent('ocr', '⚠️ OCR failed: ' + (data.error || ('HTTP ' + res.status))); return; }
+        ocrText = data.text || '';
+        setTabContent('ocr', ocrText || '(No text detected.)');
+      } catch (err) { setStep(''); setTabContent('ocr', '⚠️ Could not reach the server (OCR): ' + err.message); return; }
+
+      // STEP 2 — Qwen extraction with the per-document-type system prompt.
+      setStep('Step 2 of 3 · Extracting with Qwen (' + docType + ')…');
+      setTabContent('qwen', '⏳ Extracting with Qwen…');
+      try {
+        const res = await fetch('/api/documents/extract', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, docType, text: ocrText }),
+        });
+        const data = await res.json().catch(() => ({}));
+        setTabContent('qwen', (!res.ok || data.error)
+          ? '⚠️ Qwen extraction failed: ' + (data.error || ('HTTP ' + res.status))
+          : (data.response && data.response.trim() ? data.response : '(Qwen returned an empty response.)'));
+      } catch (err) { setTabContent('qwen', '⚠️ Could not reach the server (Qwen): ' + err.message); }
+
+      // STEP 3 — GPT-4.1-mini extraction with the same system prompt.
+      setStep('Step 3 of 3 · Extracting with GPT-4.1-mini…');
+      setTabContent('gpt', '⏳ Extracting with GPT-4.1-mini…');
+      try {
+        const res = await fetch('/api/documents/extract-gpt', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, docType, text: ocrText }),
+        });
+        const data = await res.json().catch(() => ({}));
+        setTabContent('gpt', (!res.ok || data.error)
+          ? '⚠️ GPT extraction failed: ' + (data.error || ('HTTP ' + res.status))
+          : (data.response && data.response.trim() ? data.response : '(GPT returned an empty response.)'));
+      } catch (err) { setTabContent('gpt', '⚠️ Could not reach the server (GPT): ' + err.message); }
+
+      setStep('');  // pipeline complete — hide loader
+    }
+
+    // Result button: load the stored OCR/Qwen/GPT results into the tabbed popup.
+    async function showResult(id) {
+      modalContent.ocr = modalContent.qwen = modalContent.gpt = '(loading…)';
+      openModal('Document Result', 'ocr');
+      setStep('');
+      try {
+        const res = await fetch('/api/documents/result?id=' + encodeURIComponent(id));
+        const d = await res.json().catch(() => ({}));
+        setTabContent('ocr', d.ocr || '(No OCR output yet — click Save to process this document.)');
+        setTabContent('qwen', d.qwen || '(No Qwen output yet — click Save to process this document.)');
+        setTabContent('gpt', d.gpt || '(No GPT output yet — click Save to process this document.)');
+      } catch (err) {
+        setTabContent('ocr', '⚠️ Could not load results: ' + err.message);
+      }
+    }
+
+    async function deleteDocument(id) {
+      try {
+        const res = await fetch('/api/documents?id=' + encodeURIComponent(id), { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'delete failed');
+        state.documents = state.documents.filter(d => d.id !== id);
+        renderDocumentsTable();
+      } catch (err) {
+        alert('Failed to delete document: ' + err.message);
       }
     }
 
@@ -479,6 +833,129 @@
       }
     });
 
+    // OCR result modal — close on × or clicking the dark overlay.
+    document.getElementById('ocr-modal-close').addEventListener('click',
+      () => document.getElementById('ocr-modal').classList.remove('open'));
+    document.getElementById('ocr-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'ocr-modal') e.currentTarget.classList.remove('open');
+    });
+    // Tab switching in the result/processing popup.
+    document.querySelectorAll('.modal-tab').forEach(btn => {
+      btn.addEventListener('click', () => { activeTab = btn.dataset.tab; renderModalTab(); });
+    });
+
+    // --- Scan & Upload (Home / Sales Invoice / Purchase Invoice pages) ---
+    const scanInput = document.getElementById('scan-input');
+    let scanDocType = '';     // document type to tag the committed docs with
+    let scanStaged = [];      // [{name, file}] successfully uploaded, pending Save
+
+    function startScan(docType) {
+      scanDocType = docType || '';
+      scanInput.value = '';   // allow re-selecting the same files
+      scanInput.click();
+    }
+    document.getElementById('home-scan-btn').addEventListener('click', () => startScan(''));
+    document.getElementById('sales-scan-btn').addEventListener('click', () => startScan('Sales Invoice'));
+    document.getElementById('purchase-scan-btn').addEventListener('click', () => startScan('Purchase Invoice'));
+    scanInput.addEventListener('change', () => handleScanFiles([...scanInput.files]));
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+    function openScanModal() { document.getElementById('scan-modal').classList.add('open'); }
+    function closeScanModal() { document.getElementById('scan-modal').classList.remove('open'); }
+    document.getElementById('scan-modal-close').addEventListener('click', closeScanModal);
+    document.getElementById('scan-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'scan-modal') closeScanModal();
+    });
+
+    async function handleScanFiles(files) {
+      if (!files.length) return;
+      scanStaged = [];
+      const tbody = document.getElementById('scan-tbody');
+      tbody.innerHTML = '';
+      const saveBtn = document.getElementById('scan-save-btn');
+      saveBtn.disabled = true;
+      openScanModal();
+
+      // one row per file, with a live status cell
+      const rows = files.map(f => {
+        const tr = document.createElement('tr');
+        const n = document.createElement('td'); n.textContent = f.name;
+        const s = document.createElement('td'); s.textContent = formatSize(f.size);
+        const st = document.createElement('td'); st.textContent = '⏳ Uploading…';
+        tr.append(n, s, st);
+        tbody.appendChild(tr);
+        return st;
+      });
+
+      // upload each file; mark success/failed
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        try {
+          const res = await fetch('/api/uploads?name=' + encodeURIComponent(f.name) +
+                                  '&type=' + encodeURIComponent(f.type || ''),
+                                  { method: 'POST', body: f });
+          const d = await res.json().catch(() => ({}));
+          if (res.ok && d.ok) {
+            rows[i].textContent = '✅ Success';
+            scanStaged.push({ name: f.name, file: d.file });
+          } else {
+            rows[i].textContent = '❌ Failed: ' + (d.error || ('HTTP ' + res.status));
+          }
+        } catch (err) {
+          rows[i].textContent = '❌ Failed: ' + err.message;
+        }
+      }
+      saveBtn.disabled = scanStaged.length === 0;
+    }
+
+    // Save: commit the successfully-uploaded files as documents, then show them.
+    document.getElementById('scan-save-btn').addEventListener('click', async () => {
+      if (!scanStaged.length) { alert('No successfully uploaded files to save.'); return; }
+      try {
+        const res = await fetch('/api/documents/commit', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ docType: scanDocType, files: scanStaged }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+        (d.created || []).forEach(doc => state.documents.push(doc));
+        scanStaged = [];
+        closeScanModal();
+        navigate('#/documents');   // committed documents now appear here
+      } catch (err) {
+        alert('Failed to save documents: ' + err.message);
+      }
+    });
+
+    // Documents
+    document.getElementById('new-document-btn').addEventListener('click', () => navigate('#/documents/new'));
+    document.getElementById('document-cancel-btn').addEventListener('click', () => navigate('#/documents'));
+
+    document.getElementById('new-document-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('document-name').value.trim();
+      const docType = document.getElementById('document-type').value.trim();
+      if (!name || !docType) return;
+      try {
+        const res = await fetch('/api/documents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, docType }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'save failed');
+        const doc = await res.json();
+        state.documents.push(doc);
+        document.getElementById('new-document-form').reset();
+        navigate('#/documents');
+      } catch (err) {
+        alert('Failed to save document: ' + err.message);
+      }
+    });
+
     // Invoice dashboard
     document.getElementById('create-invoice-btn').addEventListener('click', () => navigate('#/invoices/new'));
     document.getElementById('cancel-btn').addEventListener('click', () => navigate('#/invoices'));
@@ -545,28 +1022,111 @@
     loadFromServer().then(render);
   </script>
 
+  <!-- ===== OCR result popup ===== -->
+  <style>
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.5);
+      display: none; align-items: center; justify-content: center; z-index: 10000;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #fff; border-radius: 10px; width: 640px; max-width: 92vw;
+      max-height: 80vh; display: flex; flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1rem 1.25rem; border-bottom: 1px solid #e5e7eb;
+    }
+    .modal-header h3 { margin: 0; font-size: 1.1rem; color: #111827; }
+    .modal-close {
+      background: transparent; border: none; font-size: 1.6rem; line-height: 1;
+      cursor: pointer; color: #6b7280; padding: 0 .25rem;
+    }
+    .modal-close:hover { color: #111827; }
+    .modal-body {
+      margin: 0; padding: 1.25rem; overflow: auto; white-space: pre-wrap;
+      font-family: inherit; font-size: .9rem; line-height: 1.5; color: #111827;
+    }
+    .modal-step {
+      display: none; align-items: center; gap: .6rem;
+      padding: .9rem 1.25rem; border-bottom: 1px solid #e5e7eb;
+      color: #1d4ed8; font-size: .9rem; font-weight: 600; background: #f8fafc;
+    }
+    .modal-step.show { display: flex; }
+    .modal-tabs { display: flex; border-bottom: 1px solid #e5e7eb; }
+    .modal-tab {
+      flex: 1; background: transparent; border: none; border-radius: 0;
+      border-bottom: 2px solid transparent; padding: .7rem 1rem;
+      cursor: pointer; font-weight: 600; font-size: .9rem; color: #6b7280;
+    }
+    .modal-tab:hover { background: #f9fafb; color: #111827; }
+    .modal-tab.active { color: #1d4ed8; border-bottom-color: #1d4ed8; }
+    .modal-foot {
+      display: flex; justify-content: flex-end; gap: .5rem;
+      padding: 1rem 1.25rem; border-top: 1px solid #e5e7eb;
+    }
+    .modal-spinner {
+      width: 16px; height: 16px; border: 2px solid #c7d2fe;
+      border-top-color: #1d4ed8; border-radius: 50%;
+      animation: modal-spin .8s linear infinite; flex: none;
+    }
+    @keyframes modal-spin { to { transform: rotate(360deg); } }
+  </style>
+
   <!-- ===== In-app assistant (accounting + Razorpay) ===== -->
   <style>
-    /* Hidden on the login screen; shown only after login (body gets .authed). */
+    /* Hidden on the login screen; shown only after login (body gets .authed).
+       Closed by default: only the round launcher shows. Clicking it adds .open,
+       which reveals the panel and hides the launcher. The header × closes it. */
     #assistant { display: none; }
-    body.authed #assistant { display: block; }
+    body.authed #assistant {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+    }
+    #assistant-launcher {
+      width: 60px; height: 60px; border-radius: 50%; background: #047857; color: #fff;
+      border: none; cursor: pointer; font-size: 26px; box-shadow: 0 8px 30px rgba(0,0,0,.2);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #assistant-launcher:hover { background: #065f46; }
+    #assistant-panel { display: none; width: 100%; }
+    #assistant.open #assistant-panel { display: block; }
+    #assistant.open #assistant-launcher { display: none; }
+    #assistant-close {
+      background: transparent; border: none; color: #fff; font-size: 24px; line-height: 1;
+      cursor: pointer; padding: 0 4px;
+    }
+    #assistant-close:hover { color: #d1fae5; }
   </style>
   <div id="assistant" style="position:fixed;bottom:20px;right:20px;width:450px;max-width:92vw;font-family:system-ui,Arial,sans-serif;z-index:9999;">
-    <div style="border:1px solid #d1d5db;border-radius:15px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.15);overflow:hidden;">
-      <div style="background:#047857;color:#fff;padding:13px 18px;font-weight:600;font-size:18px;">Assistant</div>
-      <div id="assistant-log" style="height:350px;overflow-y:auto;padding:15px;font-size:16px;line-height:1.45;background:#f9fafb;"></div>
-      <form id="assistant-form" style="display:flex;border-top:1px solid #e5e7eb;">
-        <input id="assistant-input" autocomplete="off" placeholder="e.g. how many items in stock?" style="flex:1;border:0;padding:14px 15px;font-size:16px;outline:none;">
-        <button type="submit" id="assistant-send" style="border:0;background:#047857;color:#fff;padding:0 20px;font-size:16px;cursor:pointer;">Send</button>
-      </form>
+    <button id="assistant-launcher" type="button" title="Open assistant" aria-label="Open assistant">💬</button>
+    <div id="assistant-panel">
+      <div style="border:1px solid #d1d5db;border-radius:15px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.15);overflow:hidden;">
+        <div style="background:#047857;color:#fff;padding:13px 18px;font-weight:600;font-size:18px;display:flex;align-items:center;justify-content:space-between;">
+          <span>Assistant</span>
+          <button id="assistant-close" type="button" title="Close" aria-label="Close assistant">&times;</button>
+        </div>
+        <div id="assistant-log" style="height:350px;overflow-y:auto;padding:15px;font-size:16px;line-height:1.45;background:#f9fafb;"></div>
+        <form id="assistant-form" style="display:flex;border-top:1px solid #e5e7eb;">
+          <input id="assistant-input" autocomplete="off" placeholder="e.g. how many items in stock?" style="flex:1;border:0;padding:14px 15px;font-size:16px;outline:none;">
+          <button type="submit" id="assistant-send" style="border:0;background:#047857;color:#fff;padding:0 20px;font-size:16px;cursor:pointer;">Send</button>
+        </form>
+      </div>
     </div>
   </div>
   <script>
     (function () {
+      const assistant = document.getElementById('assistant');
+      const launcher = document.getElementById('assistant-launcher');
+      const closeBtn = document.getElementById('assistant-close');
       const log = document.getElementById('assistant-log');
       const form = document.getElementById('assistant-form');
       const input = document.getElementById('assistant-input');
       const sendBtn = document.getElementById('assistant-send');
+
+      // Closed by default — launcher opens the panel, header × closes it.
+      launcher.addEventListener('click', () => { assistant.classList.add('open'); input.focus(); });
+      closeBtn.addEventListener('click', () => { assistant.classList.remove('open'); });
       function bubble(who, text, color) {
         const d = document.createElement('div');
         d.style.margin = '6px 0';
@@ -582,7 +1142,7 @@
         log.scrollTop = log.scrollHeight;
         return span;
       }
-      bubble('Assistant', 'Hi! Ask about your information on your items, invoices or payments(through Razorpay), or your Shopify details.', '#047857');
+      bubble('Assistant', 'Hi! Ask about your information on your items, invoices or payments (through Razorpay or PayPal), or tax questions (TaxBandits), or other accounting products (Zoho Books or QuickBooks), or your Shopify details.', '#047857');
       const history = [];
       form.addEventListener('submit', async function (e) {
         e.preventDefault();

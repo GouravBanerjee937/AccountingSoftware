@@ -21,5 +21,28 @@ export SHOPIFY_ACCESS_TOKEN="shpat_REPLACE_ME"
 # Path to shopify-mcp's entry file (after: npm install shopify-mcp):
 export SHOPIFY_MCP_JS="/full/path/to/node_modules/shopify-mcp/dist/index.js"
 
+# --- QuickBooks Online (optional) ---
+# The QuickBooks MCP server reads its OWN credentials from its .env file:
+#   /Users/gourav/Work/quickbooks-online-mcp-server/.env
+# Fill in CLIENT_ID, CLIENT_SECRET, REALM_ID there and run its login step to
+# generate the refresh token. The chatbot only auto-connects QuickBooks once
+# those .env values are real (not the PASTE_..._HERE placeholders).
+# Optional override if the built server lives elsewhere:
+# export QUICKBOOKS_MCP_JS="/full/path/to/quickbooks-online-mcp-server/dist/index.js"
+
+# --- Zoho Books (optional) — the ORIGINAL community server, pip package
+#     "zoho-books-mcp" (github.com/kkeeling/zoho-mcp), installed in its own venv
+#     at /Users/gourav/Work/zoho-mcp/.venv with a pinned mcp version. ---
+# Register a server-based app at https://api-console.zoho.com (use the console
+# for your data centre) with scope ZohoBooks.fullaccess.all. Generate a refresh
+# token once with:  /Users/gourav/Work/zoho-mcp/.venv/bin/zoho-books-mcp --setup-oauth
+export ZOHO_CLIENT_ID="REPLACE_ME"
+export ZOHO_CLIENT_SECRET="REPLACE_ME"
+export ZOHO_REFRESH_TOKEN="REPLACE_ME"
+export ZOHO_ORGANIZATION_ID="REPLACE_ME"   # from your Zoho Books org settings
+export ZOHO_REGION="IN"                      # US | EU | IN | AU | JP | CA | etc.
+# Override the launcher path if you installed it elsewhere:
+# export ZOHO_MCP_BIN="/full/path/to/zoho-mcp/.venv/bin/zoho-books-mcp"
+
 # --- Accounting tools repo (optional; defaults to ../invoice-mcp) ---
 # export INVOICE_MCP_DIR="/full/path/to/invoice-mcp"
