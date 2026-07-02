@@ -5,6 +5,8 @@ import csv
 import json
 import os
 import re
+import threading
+import time
 import urllib.request
 from datetime import datetime
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
@@ -21,6 +23,9 @@ DOCUMENTS_CSV = os.path.join(DATA_DIR, 'documents.csv')
 UPLOADS_DIR = os.path.join(DATA_DIR, 'uploads')
 # Per-document processing results (OCR / Qwen / GPT) live here as <id>.json.
 RESULTS_DIR = os.path.join(DATA_DIR, 'results')
+# Profile: the email addresses and WhatsApp numbers configured by the user
+# (used to whitelist which senders' documents get ingested).
+PROFILE_JSON = os.path.join(DATA_DIR, 'profile.json')
 
 # Twilio credentials — only needed to download media from the Twilio WhatsApp
 # sandbox. Unset locally => media downloads that don't require auth still work.
@@ -36,14 +41,34 @@ ITEMS_HEADER = ['id', 'name', 'qty', 'price']
 # Original 4 columns kept first (backward compatible); customer/status fields appended.
 INVOICES_HEADER = ['number', 'item_name', 'qty', 'price',
                    'customer_name', 'customer_email', 'due_date', 'status', 'notes']
-DOCUMENTS_HEADER = ['id', 'upload_datetime', 'name', 'doc_type', 'file']
+# `saved_type`/`saved_id` link a document to the per-type record created from it
+# (appended columns => backward compatible with older documents.csv files).
+DOCUMENTS_HEADER = ['id', 'upload_datetime', 'name', 'doc_type', 'file', 'source',
+                    'saved_type', 'saved_id']
 
 ALLOWED_STATUSES = ('unpaid', 'paid', 'overdue')
 DEFAULT_STATUS = 'unpaid'
 
+# File extensions accepted from a Scan upload or a Gmail attachment (PDF/images).
+UPLOAD_EXTS = {'.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff'}
+
 # Business document categories the user can classify a document as.
 DOC_TYPES = ('Sales Invoice', 'Purchase Invoice', 'Sales Return',
-             'Purchase Return', 'Credit Note', 'Debit Note')
+             'Purchase Return', 'Receipt', 'Payment')
+
+# Each saved document type persists to its own CSV: saved_<slug>.csv. One row per
+# saved record; the full (nested) form JSON is kept in the data_json column.
+TYPE_SLUGS = {
+    'Sales Invoice': 'sales_invoice', 'Purchase Invoice': 'purchase_invoice',
+    'Sales Return': 'sales_return', 'Purchase Return': 'purchase_return',
+    'Receipt': 'receipt', 'Payment': 'payment',
+}
+SAVED_HEADER = ['id', 'created_at', 'document_name', 'amount', 'source_doc_id', 'data_json']
+
+
+def _saved_csv(doc_type):
+    slug = TYPE_SLUGS.get(doc_type)
+    return os.path.join(DATA_DIR, f'saved_{slug}.csv') if slug else None
 
 
 def valid_date(text):
@@ -94,7 +119,8 @@ def init_db():
             upload_datetime TEXT NOT NULL,
             name TEXT NOT NULL,
             doc_type TEXT NOT NULL,
-            file TEXT NOT NULL DEFAULT '')""")
+            file TEXT NOT NULL DEFAULT '',
+            source TEXT NOT NULL DEFAULT 'internal')""")
 
 
 # ---- CSV helpers (used in local mode) ----
@@ -198,14 +224,16 @@ def save_invoices(invoices):
 def load_documents():
     if USE_PG:
         with _pg() as conn, conn.cursor() as cur:
-            cur.execute("""SELECT id, upload_datetime, name, doc_type, file
+            cur.execute("""SELECT id, upload_datetime, name, doc_type, file, source
                            FROM documents ORDER BY id""")
             return [{'id': r[0], 'uploadDateTime': r[1] or '',
-                     'name': r[2] or '', 'docType': r[3] or '', 'file': r[4] or ''}
+                     'name': r[2] or '', 'docType': r[3] or '', 'file': r[4] or '',
+                     'source': r[5] or 'internal', 'savedType': '', 'savedId': ''}
                     for r in cur.fetchall()]
     return [{'id': int(r['id']), 'uploadDateTime': r.get('upload_datetime', ''),
              'name': r.get('name', ''), 'docType': r.get('doc_type', ''),
-             'file': r.get('file', '')}
+             'file': r.get('file', ''), 'source': r.get('source') or 'internal',
+             'savedType': r.get('saved_type') or '', 'savedId': r.get('saved_id') or ''}
             for r in read_csv(DOCUMENTS_CSV, DOCUMENTS_HEADER)]
 
 
@@ -214,15 +242,80 @@ def save_documents(documents):
         with _pg() as conn, conn.cursor() as cur:
             cur.execute("DELETE FROM documents")
             cur.executemany(
-                """INSERT INTO documents (id, upload_datetime, name, doc_type, file)
-                   VALUES (%s, %s, %s, %s, %s)""",
+                """INSERT INTO documents (id, upload_datetime, name, doc_type, file, source)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
                 [(d['id'], d['uploadDateTime'], d['name'], d['docType'],
-                  d.get('file', '')) for d in documents])
+                  d.get('file', ''), d.get('source', 'internal')) for d in documents])
         return
     rows = [{'id': d['id'], 'upload_datetime': d['uploadDateTime'],
              'name': d['name'], 'doc_type': d['docType'],
-             'file': d.get('file', '')} for d in documents]
+             'file': d.get('file', ''), 'source': d.get('source', 'internal'),
+             'saved_type': d.get('savedType', ''), 'saved_id': d.get('savedId', '')}
+            for d in documents]
     write_csv(DOCUMENTS_CSV, DOCUMENTS_HEADER, rows)
+
+
+def load_profile():
+    """Return {'emails': [...], 'whatsapp': [...]} — two independent lists."""
+    if os.path.isfile(PROFILE_JSON):
+        with open(PROFILE_JSON, encoding='utf-8') as f:
+            data = json.load(f)
+    else:
+        data = {}
+    companies = list(data.get('companies', []))
+    company = str(data.get('company', '') or '')
+    if not companies and company:          # migrate the old single-name field
+        companies = [company]
+    return {'emails': list(data.get('emails', [])),
+            'whatsapp': list(data.get('whatsapp', [])),
+            'company': company, 'companies': companies}
+
+
+def save_profile(profile):
+    with open(PROFILE_JSON, 'w', encoding='utf-8') as f:
+        json.dump(profile, f)
+
+
+def poll_gmail():
+    """Ingest invoice attachments sent by allowed senders (profile emails) to the
+    connected system inbox. Each email is labelled so it is ingested only once.
+    Safe to call anytime — returns a summary dict, never raises."""
+    try:
+        import gmail_client
+        if not gmail_client.is_configured():
+            return {'ok': False, 'error': 'Gmail not configured'}
+        senders = load_profile().get('emails', [])
+        if not senders:
+            return {'ok': True, 'ingested': 0, 'note': 'no allowed sender emails in profile'}
+
+        token = gmail_client.get_access_token()
+        label_id = gmail_client.ensure_label(token)
+        from_q = ' OR '.join(f'from:{s}' for s in senders)
+        query = f'has:attachment ({from_q}) -label:{gmail_client.INGEST_LABEL}'
+        ids = gmail_client.list_message_ids(token, query)
+
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+        ingested = 0
+        for mid in ids:
+            msg = gmail_client.get_message(token, mid)
+            for filename, mime, att_id in gmail_client.iter_attachments(msg):
+                ext = os.path.splitext(filename)[1].lower()
+                if ext not in UPLOAD_EXTS and not (
+                        mime == 'application/pdf' or mime.startswith('image/')):
+                    continue
+                data = gmail_client.get_attachment_bytes(token, mid, att_id)
+                if not data:
+                    continue
+                stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                stored = _safe_filename(f'email_{stamp}_{filename}')
+                with open(os.path.join(UPLOADS_DIR, stored), 'wb') as f:
+                    f.write(data)
+                add_document(filename, '', file=f'uploads/{stored}', source='email')
+                ingested += 1
+            gmail_client.add_label(token, mid, label_id)   # don't reprocess
+        return {'ok': True, 'ingested': ingested}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
 
 
 def _result_path(doc_id):
@@ -238,6 +331,173 @@ def load_result(doc_id):
     return {}
 
 
+def _parse_json_blob(s):
+    """Best-effort parse of a model response (may have code fences / <think>)."""
+    if not isinstance(s, str):
+        return None
+    s = re.sub(r'<think>.*?</think>', '', s, flags=re.S)
+    s = s.replace('```json', '').replace('```', '')
+    a, b = s.find('{'), s.rfind('}')
+    if a == -1 or b == -1:
+        return None
+    try:
+        return json.loads(s[a:b + 1])
+    except Exception:
+        return None
+
+
+def amount_from_obj(obj):
+    """Pull a best-effort total out of an extracted/edited document object,
+    covering the invoice, credit/debit note and receipt/payment schemas."""
+    if not isinstance(obj, dict):
+        return None
+    for path in (('summary', 'grand_total'), ('footer', 'total'),
+                 ('footer', 'total_receipt'), ('receipt_details', 'amount_received')):
+        d = obj
+        for p in path:
+            d = d.get(p) if isinstance(d, dict) else None
+        if d not in (None, '', 0, 0.0):
+            return d
+    return None
+
+
+def document_amount(doc_id):
+    """Best-effort total amount for a document, from its stored GPT/Qwen JSON."""
+    try:
+        result = load_result(doc_id)
+    except Exception:
+        return None
+    for key in ('gpt', 'qwen'):
+        amt = amount_from_obj(_parse_json_blob(result.get(key)))
+        if amt is not None:
+            return amt
+    return None
+
+
+# ---- OCR status + background auto-OCR ----
+# Every document with a file is OCR'd automatically as soon as it arrives (before
+# it is opened), so the Documents page can show OCR status and offer a Retry.
+# Status lives in the document's result file: 'pending' | 'running' | 'ok' | 'failed'.
+_ocr_lock = threading.Lock()
+_ocr_inflight = set()
+
+
+def get_ocr_status(doc_id):
+    r = load_result(doc_id)
+    if r.get('ocr_status'):
+        return r['ocr_status']
+    if r.get('ocr'):
+        return 'ok'          # legacy result files that predate status tracking
+    return 'pending'
+
+
+def set_ocr_status(doc_id, status, error=''):
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    data = load_result(doc_id)
+    data['ocr_status'] = status
+    data['ocr_error'] = error
+    with open(_result_path(doc_id), 'w', encoding='utf-8') as f:
+        json.dump(data, f)
+
+
+def run_ocr_for(doc):
+    """OCR one document's file, storing text + status. Returns (ok, error)."""
+    doc_id = doc['id']
+    rel = doc.get('file', '')
+    if not rel:
+        set_ocr_status(doc_id, 'failed', 'this document has no file to OCR')
+        return False, 'no file'
+    fpath = os.path.join(DATA_DIR, rel)
+    if not os.path.isfile(fpath):
+        set_ocr_status(doc_id, 'failed', 'file not found on server')
+        return False, 'file not found'
+    set_ocr_status(doc_id, 'running')
+    try:
+        import ocr_client
+        companies = load_profile().get('companies', [])
+        text, suggested_type = ocr_client.ocr_and_classify(fpath, companies)
+    except Exception as e:
+        set_ocr_status(doc_id, 'failed', str(e))
+        return False, str(e)
+    save_result_field(doc_id, 'ocr', text)
+    # The vision model also classifies the document type — store it as a
+    # suggestion the UI pre-selects (the user can still override it).
+    if suggested_type:
+        save_result_field(doc_id, 'suggested_type', suggested_type)
+    set_ocr_status(doc_id, 'ok')
+    return True, None
+
+
+def _auto_ocr_loop():
+    """Continuously OCR any document that is still 'pending'. Sequential (one at
+    a time) to avoid hammering the OCR service. 'failed' docs are left for the
+    user to Retry (which re-queues them as 'pending')."""
+    while True:
+        try:
+            for doc in load_documents():
+                if not doc.get('file'):
+                    continue
+                if get_ocr_status(doc['id']) != 'pending':
+                    continue
+                with _ocr_lock:
+                    if doc['id'] in _ocr_inflight:
+                        continue
+                    _ocr_inflight.add(doc['id'])
+                try:
+                    run_ocr_for(doc)
+                finally:
+                    with _ocr_lock:
+                        _ocr_inflight.discard(doc['id'])
+        except Exception as e:
+            print('OCR worker error:', e)
+        time.sleep(3)
+
+
+# ---- Per-type saved-record store (one CSV per document type) ----
+def load_saved(doc_type):
+    """Return all saved records for a document type (newest-friendly order kept)."""
+    path = _saved_csv(doc_type)
+    if not path:
+        return []
+    out = []
+    for r in read_csv(path, SAVED_HEADER):
+        try:
+            data = json.loads(r.get('data_json') or '{}')
+        except Exception:
+            data = {}
+        try:
+            rid = int(r['id'])
+        except (KeyError, ValueError, TypeError):
+            continue
+        out.append({'id': rid, 'createdAt': r.get('created_at', ''),
+                    'documentName': r.get('document_name', ''),
+                    'amount': r.get('amount', ''),
+                    'sourceDocId': r.get('source_doc_id', ''), 'data': data})
+    return out
+
+
+def write_saved(doc_type, records):
+    path = _saved_csv(doc_type)
+    if not path:
+        return
+    rows = [{'id': r['id'], 'created_at': r['createdAt'],
+             'document_name': r['documentName'], 'amount': r['amount'],
+             'source_doc_id': r['sourceDocId'],
+             'data_json': json.dumps(r['data'], ensure_ascii=False)} for r in records]
+    write_csv(path, SAVED_HEADER, rows)
+
+
+def mark_document_saved(doc_id, doc_type, saved_id):
+    """Record on the source document which per-type record was created from it."""
+    documents = load_documents()
+    doc = next((d for d in documents if d['id'] == doc_id), None)
+    if not doc:
+        return
+    doc['savedType'] = doc_type
+    doc['savedId'] = str(saved_id)
+    save_documents(documents)
+
+
 def save_result_field(doc_id, key, value):
     """Merge one result field (ocr/qwen/gpt) into the document's result file."""
     os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -247,14 +507,15 @@ def save_result_field(doc_id, key, value):
         json.dump(data, f)
 
 
-def add_document(name, doc_type, file=''):
+def add_document(name, doc_type, file='', source='internal'):
     """Append one document row. Upload date/time is stamped here, server-side.
-    Shared by the manual 'Add Document' form and the WhatsApp webhook."""
+    `source` records where it came from: whatsapp / email / Home / internal."""
     documents = load_documents()
     next_id = max((d['id'] for d in documents), default=0) + 1
     new_doc = {'id': next_id,
                'uploadDateTime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-               'name': name, 'docType': doc_type, 'file': file}
+               'name': name, 'docType': doc_type, 'file': file, 'source': source,
+               'savedType': '', 'savedId': ''}
     documents.append(new_doc)
     save_documents(documents)
     return new_doc
@@ -298,7 +559,14 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/api/invoices':
             return self._json(load_invoices())
         if path == '/api/documents':
-            return self._json(load_documents())
+            docs = load_documents()
+            for d in docs:
+                d['amount'] = document_amount(d['id'])
+                r = load_result(d['id'])
+                d['ocrStatus'] = get_ocr_status(d['id'])
+                d['ocrError'] = r.get('ocr_error', '')
+                d['suggestedType'] = r.get('suggested_type', '')
+            return self._json(docs)
         if path == '/api/documents/result':
             qs = parse_qs(urlparse(self.path).query)
             try:
@@ -306,6 +574,39 @@ class Handler(SimpleHTTPRequestHandler):
             except ValueError:
                 return self._error(400, 'invalid id')
             return self._json(load_result(doc_id))
+        if path == '/api/saved':
+            qs = parse_qs(urlparse(self.path).query)
+            doc_type = qs.get('type', [''])[0].strip()
+            if doc_type not in DOC_TYPES:
+                return self._error(400, 'invalid or missing type')
+            records = load_saved(doc_type)
+            id_q = qs.get('id', [None])[0]
+            if id_q not in (None, ''):
+                try:
+                    rid = int(id_q)
+                except ValueError:
+                    return self._error(400, 'invalid id')
+                rec = next((r for r in records if r['id'] == rid), None)
+                if rec is None:
+                    return self._error(404, 'record not found')
+                return self._json(rec)   # full record incl. nested data
+            # List view: omit the heavy data_json, newest first.
+            summary = [{'id': r['id'], 'createdAt': r['createdAt'],
+                        'documentName': r['documentName'], 'amount': r['amount'],
+                        'sourceDocId': r['sourceDocId']} for r in records]
+            summary.sort(key=lambda r: r['id'], reverse=True)
+            return self._json(summary)
+        if path == '/api/profile':
+            return self._json(load_profile())
+        if path == '/api/gmail/address':
+            import gmail_client
+            if not gmail_client.is_configured():
+                return self._json({'configured': False, 'address': None})
+            try:
+                token = gmail_client.get_access_token()
+                return self._json({'configured': True, 'address': gmail_client.get_address(token)})
+            except Exception as e:
+                return self._json({'configured': True, 'address': None, 'error': str(e)})
         return super().do_GET()
 
     def _authorized(self):
@@ -347,13 +648,47 @@ class Handler(SimpleHTTPRequestHandler):
             return self._create_document(data)
         if path == '/api/documents/ocr':
             return self._ocr_document(data)
+        if path == '/api/documents/ocr-retry':
+            return self._ocr_retry(data)
         if path == '/api/documents/extract':
             return self._extract_document(data)
         if path == '/api/documents/extract-gpt':
             return self._extract_gpt(data)
         if path == '/api/documents/commit':
             return self._commit_documents(data)
+        if path == '/api/documents/classify':
+            return self._classify_file(data)
+        if path == '/api/saved':
+            return self._create_saved(data)
+        if path == '/api/profile':
+            return self._add_profile_entry(data)
+        if path == '/api/profile/company':
+            return self._set_company(data)
+        if path == '/api/gmail/poll':
+            return self._json(poll_gmail())
         return self._error(404, 'not found')
+
+    def _add_profile_entry(self, data):
+        """Add one email / whatsapp number / company name to the profile (deduped)."""
+        kind = str(data.get('kind', '') or '').strip()
+        value = str(data.get('value', '') or '').strip()
+        if kind not in ('emails', 'whatsapp', 'companies'):
+            return self._error(400, "kind must be 'emails', 'whatsapp' or 'companies'")
+        if not value:
+            return self._error(400, 'value is required')
+        profile = load_profile()
+        if value not in profile[kind]:
+            profile[kind].append(value)
+            save_profile(profile)
+        return self._json(profile)
+
+    def _set_company(self, data):
+        """Set the single (editable) company name on the profile."""
+        name = str(data.get('name', '') or '').strip()
+        profile = load_profile()
+        profile['company'] = name
+        save_profile(profile)
+        return self._json(profile)
 
     def _ask(self, data):
         """In-app assistant: forward the question to the OpenAI-powered agent."""
@@ -422,6 +757,29 @@ class Handler(SimpleHTTPRequestHandler):
                     pass
             save_documents([d for d in documents if d['id'] != doc_id])
             return self._json({'deleted': doc_id})
+        if path == '/api/profile':
+            kind = qs.get('kind', [''])[0].strip()
+            value = qs.get('value', [''])[0].strip()
+            if kind not in ('emails', 'whatsapp', 'companies'):
+                return self._error(400, "kind must be 'emails', 'whatsapp' or 'companies'")
+            profile = load_profile()
+            profile[kind] = [v for v in profile[kind] if v != value]
+            save_profile(profile)
+            return self._json(profile)
+        if path == '/api/saved':
+            doc_type = qs.get('type', [''])[0].strip()
+            if doc_type not in DOC_TYPES:
+                return self._error(400, 'invalid or missing type')
+            try:
+                rid = int(qs.get('id', [''])[0])
+            except ValueError:
+                return self._error(400, 'invalid id')
+            records = load_saved(doc_type)
+            remaining = [r for r in records if r['id'] != rid]
+            if len(remaining) == len(records):
+                return self._error(404, 'record not found')
+            write_saved(doc_type, remaining)
+            return self._json({'deleted': rid})
         return self._error(404, 'not found')
 
     def do_PUT(self):
@@ -606,9 +964,6 @@ class Handler(SimpleHTTPRequestHandler):
 
         return self._json(add_document(name, doc_type), status=201)
 
-    # File extensions accepted by the Scan upload (PDFs and images).
-    _UPLOAD_EXTS = {'.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff'}
-
     def _upload_file(self, raw):
         """Stage one uploaded file (PDF/image) into uploads/. Does NOT create a
         document row yet — that happens on commit. Returns per-file status."""
@@ -616,7 +971,7 @@ class Handler(SimpleHTTPRequestHandler):
         name = (qs.get('name', [''])[0] or 'file').strip()
         ctype = qs.get('type', [''])[0]
         ext = os.path.splitext(name)[1].lower()
-        is_ok_type = (ext in self._UPLOAD_EXTS
+        is_ok_type = (ext in UPLOAD_EXTS
                       or ctype == 'application/pdf' or ctype.startswith('image/'))
         if not is_ok_type:
             return self._json({'ok': False, 'name': name, 'size': len(raw),
@@ -632,9 +987,30 @@ class Handler(SimpleHTTPRequestHandler):
         return self._json({'ok': True, 'name': name, 'size': len(raw),
                            'file': f'uploads/{stored}'})
 
+    def _classify_file(self, data):
+        """Classify a staged (uploaded) file's document type WITHOUT committing it.
+        Used by the Scan flow: when a user scans from a specific type page we ask the
+        vision model what type it thinks the file is, so the UI can warn on a mismatch.
+        Returns {'suggested_type': <one of DOC_TYPES or ''>}."""
+        rel = str(data.get('file', '') or '').strip()
+        if not rel.startswith('uploads/') or '..' in rel:
+            return self._error(400, 'a valid uploaded file is required')
+        fpath = os.path.join(DATA_DIR, rel)
+        if not os.path.isfile(fpath):
+            return self._error(404, 'file not found')
+        try:
+            import ocr_client
+            companies = load_profile().get('companies', [])
+            _text, suggested = ocr_client.ocr_and_classify(fpath, companies)
+        except Exception as e:
+            # Best-effort: on any classifier error, return no suggestion (no popup).
+            return self._json({'suggested_type': '', 'error': str(e)})
+        return self._json({'suggested_type': suggested or ''})
+
     def _commit_documents(self, data):
         """Create document rows for the successfully-uploaded (staged) files."""
         doc_type = str(data.get('docType', '') or '').strip()
+        source = str(data.get('source', '') or 'Home').strip()
         files = data.get('files') or []
         created = []
         for f in files:
@@ -645,8 +1021,37 @@ class Handler(SimpleHTTPRequestHandler):
                 continue
             if not os.path.isfile(os.path.join(DATA_DIR, rel)):
                 continue
-            created.append(add_document(name, doc_type, file=rel))
+            created.append(add_document(name, doc_type, file=rel, source=source))
         return self._json({'created': created}, status=201)
+
+    def _create_saved(self, data):
+        """Persist a filled document form into its per-type CSV store. Computes a
+        best-effort amount and, if it came from a Documents row, marks that row
+        as processed (saved_type / saved_id)."""
+        doc_type = str(data.get('type', '') or '').strip()
+        if doc_type not in DOC_TYPES:
+            return self._error(400, f'type must be one of: {", ".join(DOC_TYPES)}')
+        payload = data.get('data')
+        if not isinstance(payload, dict):
+            return self._error(400, 'a data object is required')
+        document_name = str(data.get('documentName', '') or '').strip() or 'Untitled'
+        source_doc_id = str(data.get('sourceDocId', '') or '').strip()
+        records = load_saved(doc_type)
+        next_id = max((r['id'] for r in records), default=0) + 1
+        amount = amount_from_obj(payload)
+        rec = {'id': next_id,
+               'createdAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+               'documentName': document_name,
+               'amount': '' if amount is None else amount,
+               'sourceDocId': source_doc_id, 'data': payload}
+        records.append(rec)
+        write_saved(doc_type, records)
+        if source_doc_id:
+            try:
+                mark_document_saved(int(source_doc_id), doc_type, next_id)
+            except (ValueError, TypeError):
+                pass
+        return self._json({'id': next_id, 'amount': rec['amount']}, status=201)
 
     def _ocr_document(self, data):
         """Run OCR on a document's stored file via the PP-OCRv5 demo."""
@@ -654,35 +1059,41 @@ class Handler(SimpleHTTPRequestHandler):
             doc_id = int(data['id'])
         except (KeyError, ValueError, TypeError):
             return self._error(400, 'a valid document id is required')
-        documents = load_documents()
-        doc = next((d for d in documents if d['id'] == doc_id), None)
+        doc = next((d for d in load_documents() if d['id'] == doc_id), None)
         if doc is None:
             return self._error(404, 'document not found')
-        rel = doc.get('file', '')
-        if not rel:
-            return self._error(400, 'this document has no file to OCR')
-        fpath = os.path.join(DATA_DIR, rel)
-        if not os.path.isfile(fpath):
-            return self._error(404, 'file not found on server')
+        ok, err = run_ocr_for(doc)
+        if not ok:
+            return self._json({'text': None, 'error': f'OCR service error: {err}'})
+        return self._json({'text': load_result(doc_id).get('ocr', '')})
+
+    def _ocr_retry(self, data):
+        """Re-queue a document for OCR (the background worker picks it up)."""
         try:
-            import paddle_ocr
-            text = paddle_ocr.ocr_file(fpath)
-        except Exception as e:  # cold start / queue / network — report, don't crash
-            return self._json({'text': None, 'error': f'OCR service error: {e}'})
-        save_result_field(doc_id, 'ocr', text)
-        return self._json({'text': text})
+            doc_id = int(data['id'])
+        except (KeyError, ValueError, TypeError):
+            return self._error(400, 'a valid document id is required')
+        if not any(d['id'] == doc_id for d in load_documents()):
+            return self._error(404, 'document not found')
+        set_ocr_status(doc_id, 'pending')
+        return self._json({'ok': True, 'status': 'pending'})
 
     def _extract_document(self, data):
         """Send OCR text to Qwen with a system prompt chosen by document type."""
         return self._llm_extract(data, engine='qwen')
 
     def _extract_gpt(self, data):
-        """Send OCR text to gpt-4.1-mini with the same per-type system prompt."""
+        """Audit the Qwen extraction with gpt-4.1-mini using the per-type GPT
+        prompt (user message = OCR + the stored Qwen output)."""
         return self._llm_extract(data, engine='gpt')
 
     def _llm_extract(self, data, engine):
-        """Shared extraction: pick the system prompt by document type, run the
-        chosen engine on the OCR text, store the result under its key."""
+        """Shared extraction. Pick the per-document-type system prompt for this
+        engine and run it, storing the result under its key.
+
+        Pipeline: OCR -> Qwen(qwen prompt + OCR) -> GPT(gpt prompt + OCR +
+        Qwen output). For the GPT (auditor) step the user message carries both
+        the original OCR and the Qwen draft so GPT can correct it."""
         doc_type = str(data.get('docType', '') or '').strip()
         text = str(data.get('text', '') or '').strip()
         doc_id = data.get('id')
@@ -690,14 +1101,17 @@ class Handler(SimpleHTTPRequestHandler):
             return self._error(400, 'no OCR text provided to extract')
 
         import doc_prompts
-        system = doc_prompts.get_system_prompt(doc_type)
+        system = doc_prompts.get_system_prompt(doc_type, engine)
         if not system:
             return self._json({'response': None,
-                               'error': f'No system prompt configured for document type "{doc_type}".'})
+                               'error': f'No {engine} system prompt configured for document type "{doc_type}".'})
         try:
             if engine == 'gpt':
                 import gpt_client
-                response = gpt_client.chat(system, text)
+                # Auditor input: original OCR + the Qwen draft for this document.
+                qwen_output = str((load_result(doc_id) or {}).get('qwen', '') or '')
+                user = f'Original Data:\n{text}\n\nQwen Extraction:\n{qwen_output}'
+                response = gpt_client.chat(system, user)
             else:
                 import qwen_client
                 response = qwen_client.chat(system, text)
@@ -742,7 +1156,7 @@ class Handler(SimpleHTTPRequestHandler):
 
             # Document name: the WhatsApp caption if any, else the stored name.
             name = caption or stored
-            add_document(name, subtype, file=f'uploads/{stored}')
+            add_document(name, subtype, file=f'uploads/{stored}', source='whatsapp')
             saved += 1
 
         print(f'WhatsApp webhook: {saved}/{num_media} media saved (from {field("From")})')
@@ -775,6 +1189,32 @@ if __name__ == '__main__':
     os.makedirs(UPLOADS_DIR, exist_ok=True)  # where WhatsApp PDFs land
     os.makedirs(RESULTS_DIR, exist_ok=True)  # where OCR/Qwen/GPT results land
     init_db()  # create Postgres tables on first hosted boot (no-op in CSV mode)
+
+    # Background Gmail poller: automatically pulls invoices from allowed senders.
+    # Interval overridable via GMAIL_POLL_SECONDS (default 10s).
+    gmail_poll_seconds = int(os.environ.get('GMAIL_POLL_SECONDS', '10'))
+
+    def _gmail_loop():
+        while True:
+            res = poll_gmail()
+            if res.get('ingested'):
+                print(f'Gmail: ingested {res["ingested"]} attachment(s)')
+            elif res.get('error') and res['error'] != 'Gmail not configured':
+                print(f'Gmail poll: {res["error"]}')
+            time.sleep(gmail_poll_seconds)
+
+    try:
+        import gmail_client
+        if gmail_client.is_configured():
+            threading.Thread(target=_gmail_loop, daemon=True).start()
+            print(f'Gmail poller started (every {gmail_poll_seconds}s)')
+    except Exception as e:
+        print('Gmail poller not started:', e)
+
+    # Background auto-OCR: OCR every document that arrives, as soon as it arrives.
+    threading.Thread(target=_auto_ocr_loop, daemon=True).start()
+    print('Auto-OCR worker started')
+
     # When PORT is set (e.g. on Render/Fly/Railway) bind publicly; otherwise
     # only bind to localhost for local development.
     port = int(os.environ.get('PORT', '3000'))

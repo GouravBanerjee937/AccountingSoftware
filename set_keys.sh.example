@@ -46,3 +46,12 @@ export ZOHO_REGION="IN"                      # US | EU | IN | AU | JP | CA | etc
 
 # --- Accounting tools repo (optional; defaults to ../invoice-mcp) ---
 # export INVOICE_MCP_DIR="/full/path/to/invoice-mcp"
+
+# --- Gmail "system inbox" for email invoice ingestion (optional) ---
+# Create an OAuth Desktop client in Google Cloud (Gmail API enabled), authorize
+# the inbox account with scope https://www.googleapis.com/auth/gmail.modify,
+# and paste the resulting values here. Allowed SENDERS are configured in the
+# app's Home > Profile page (not here).
+export GMAIL_CLIENT_ID="REPLACE_WITH_CLIENT_ID.apps.googleusercontent.com"
+export GMAIL_CLIENT_SECRET="REPLACE_WITH_CLIENT_SECRET"
+export GMAIL_REFRESH_TOKEN="REPLACE_WITH_REFRESH_TOKEN"

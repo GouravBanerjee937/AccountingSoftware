@@ -121,6 +121,119 @@
     .row { display: flex; gap: 0.5rem; }
     .row > button { flex: 1; }
 
+    /* --- Schema-driven document form --- */
+    .form-section {
+      border: 1px solid #e5e7eb; border-radius: 10px;
+      padding: 1rem 1.1rem 1.15rem; margin-bottom: 1rem; background: #fff;
+    }
+    .form-section-title {
+      margin: 0 0 .9rem; font-size: 1rem; color: #111827; font-weight: 700;
+      padding-bottom: .5rem; border-bottom: 2px solid #eef2ff;
+    }
+    .form-subsection {
+      margin-top: .9rem; padding: .85rem .9rem; background: #f9fafb;
+      border: 1px solid #eef1f5; border-radius: 8px;
+    }
+    .form-subsection-title {
+      margin: 0 0 .7rem; font-size: .8125rem; font-weight: 700; color: #4338ca;
+      text-transform: uppercase; letter-spacing: .3px;
+    }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: .75rem 1rem;
+    }
+    .form-field { display: block; margin: 0; }
+    .form-field > span {
+      display: block; font-size: .8125rem; color: #374151; margin-bottom: .3rem;
+    }
+    .form-field input { margin: 0; }
+    .form-array-rows { display: flex; flex-direction: column; gap: .75rem; }
+    .form-array-row {
+      position: relative; padding: .85rem .9rem; background: #f9fafb;
+      border: 1px solid #eef1f5; border-radius: 8px;
+    }
+    .form-array-row .row-index {
+      font-size: .75rem; font-weight: 700; color: #6b7280; margin-bottom: .55rem;
+    }
+    .form-array-add { margin-top: .75rem; }
+    button.small { padding: .4rem .8rem; font-size: .85rem; }
+    button.icon-btn {
+      background: transparent; border: none; box-shadow: none; cursor: pointer;
+      font-size: 1.2rem; line-height: 1; padding: .25rem .4rem; color: inherit;
+    }
+    button.icon-btn:hover { background: #f3f4f6; }
+    .row-remove {
+      position: absolute; top: .6rem; right: .6rem; background: transparent;
+      color: #b91c1c; border: none; cursor: pointer; font-size: .8125rem;
+      padding: .1rem .3rem; box-shadow: none;
+    }
+    .row-remove:hover { background: #fef2f2; color: #991b1b; }
+
+    /* --- Two-pane create-from-document layout --- */
+    .doc-split { display: flex; gap: 1.25rem; align-items: flex-start; }
+    .doc-split.no-pdf .doc-pdf-pane { display: none; }
+    .doc-split.no-pdf .doc-form-pane { flex: 1; }
+    .doc-pdf-pane {
+      flex: 0 0 44%; position: sticky; top: 1rem;
+      height: calc(100vh - 7rem); min-height: 420px;
+      border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #f3f4f6;
+    }
+    .doc-pdf-holder, .doc-pdf-holder iframe, .doc-pdf-holder embed, .doc-pdf-holder img {
+      width: 100%; height: 100%; border: 0; display: block;
+    }
+    .doc-pdf-holder img { object-fit: contain; }
+    .doc-form-pane { flex: 1; min-width: 0; }
+    .pipeline-status {
+      display: none; align-items: center; gap: .6rem; margin-bottom: 1rem;
+      padding: .7rem .9rem; border-radius: 8px; font-size: .9rem;
+      background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af;
+    }
+    .pipeline-status.show { display: flex; }
+    .pipeline-status.is-error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .pipeline-status.is-done { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+    .pipeline-spinner {
+      width: 15px; height: 15px; border: 2px solid #bfdbfe; border-top-color: #1d4ed8;
+      border-radius: 50%; animation: spin 0.7s linear infinite; flex: 0 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pipeline-status .retry-btn {
+      margin-left: auto; padding: .3rem .7rem; font-size: .8rem;
+      background: #fff; color: #991b1b; border: 1px solid #fecaca; box-shadow: none;
+    }
+    .doc-pdf-steps { padding: 1rem; color: #6b7280; font-size: .9rem; }
+    /* View-result popup: PDF on the left, OCR/Qwen/GPT tabs on the right */
+    #ocr-modal .modal-box { max-width: 1150px; width: 94vw; }
+    .ocr-modal-split { display: flex; gap: 1rem; align-items: stretch; height: 72vh; }
+    .ocr-modal-pdf {
+      flex: 1 1 50%; min-width: 0; border: 1px solid #e5e7eb; border-radius: 10px;
+      overflow: hidden; background: #f3f4f6;
+    }
+    .ocr-modal-right { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .ocr-modal-right .modal-body { flex: 1; overflow: auto; margin: 0; }
+    @media (max-width: 800px) {
+      .ocr-modal-split { flex-direction: column; height: auto; }
+      .ocr-modal-pdf { height: 45vh; }
+    }
+
+    /* Full-page blocking loader (covers the whole viewport, captures all input) */
+    .page-loader {
+      position: fixed; inset: 0; z-index: 10000; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(15, 23, 42, 0.55); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+    }
+    .page-loader.show { display: flex; }
+    .page-loader-box {
+      background: #fff; border-radius: 14px; padding: 1.9rem 2.4rem; text-align: center;
+      box-shadow: 0 20px 55px rgba(0, 0, 0, 0.35); max-width: 90vw; min-width: 280px;
+    }
+    .page-loader-spinner {
+      width: 44px; height: 44px; margin: 0 auto 1.1rem;
+      border: 4px solid #e5e7eb; border-top-color: #4338ca; border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .page-loader-text { font-size: 1.05rem; font-weight: 700; color: #111827; }
+    .page-loader-sub { margin-top: 0.4rem; font-size: 0.85rem; color: #6b7280; }
+
     .error { color: #b91c1c; font-size: 0.875rem; margin-bottom: 0.75rem; display: none; }
     .message { color: #047857; font-size: 0.875rem; margin-top: 0.75rem; display: none; }
 
@@ -149,6 +262,145 @@
       background: #f9fafb;
       border-radius: 6px;
     }
+    .profile-list { list-style: none; padding: 0; margin: 0 0 .6rem; }
+    .profile-list li {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .5rem .75rem; background: #f9fafb; border: 1px solid #e5e7eb;
+      border-radius: 6px; margin-bottom: .4rem; font-size: .9375rem;
+    }
+    .profile-list .empty-note { color: #6b7280; font-size: .875rem; padding: .25rem 0; }
+    .profile-list .remove-btn {
+      background: transparent; color: #b91c1c; border: none; cursor: pointer;
+      padding: .15rem .4rem; font-size: .85rem; width: auto;
+    }
+    .profile-list .remove-btn:hover { background: #fee2e2; border-radius: 4px; }
+
+    /* ============================================================
+       Visual theme / polish  (professional refresh)
+       ============================================================ */
+    :root {
+      --brand: #4f46e5;
+      --brand-600: #4338ca;
+      --brand-700: #3730a3;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e5e9f0;
+    }
+    body {
+      background: linear-gradient(180deg, #eef2f7 0%, #e7ecf3 100%);
+      color: var(--ink);
+    }
+    a, button, .profile-avatar {
+      transition: background .15s ease, color .15s ease, box-shadow .15s ease,
+                  border-color .15s ease, transform .05s ease;
+    }
+
+    /* Top nav */
+    .nav {
+      background: linear-gradient(90deg, #0b1220 0%, #14213d 55%, #1e2a4a 100%);
+      box-shadow: 0 2px 12px rgba(15, 23, 42, .20);
+      padding-top: .6rem; padding-bottom: .6rem;
+    }
+    .nav .brand {
+      display: inline-flex; align-items: center; gap: .55rem;
+      font-size: 1.05rem; letter-spacing: .2px; color: #fff;
+    }
+    .nav .brand::before {
+      content: ""; width: 22px; height: 22px; border-radius: 6px;
+      background: linear-gradient(135deg, #6366f1, #22d3ee);
+      box-shadow: 0 2px 6px rgba(99, 102, 241, .55);
+    }
+    .nav a, .nav-dropbtn { font-weight: 500; }
+    .nav a:hover, .nav a.active, .nav-dropbtn:hover { background: rgba(255,255,255,.12); color: #fff; }
+
+    /* Profile avatar dropdown (click to open) */
+    .profile-dropdown { margin-left: .35rem; }
+    .profile-avatar {
+      width: 38px; height: 38px; border-radius: 50%; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6366f1, #0ea5e9);
+      color: #fff; border: 2px solid rgba(255,255,255,.28); cursor: pointer;
+      box-shadow: 0 2px 8px rgba(2, 6, 23, .35);
+    }
+    .profile-avatar:hover { border-color: rgba(255,255,255,.65); }
+    .profile-avatar svg { width: 22px; height: 22px; display: block; }
+    .profile-dropdown.open .profile-avatar { border-color: #fff; }
+
+    /* profile menu opens on .open (click), not hover */
+    .profile-dropdown .nav-dropdown-menu { display: none; }
+    .profile-dropdown:hover .nav-dropdown-menu { display: none; }
+    .profile-dropdown.open .nav-dropdown-menu { display: block; }
+    .profile-dropdown .nav-dropdown-menu {
+      left: auto; right: 0; min-width: 210px; padding: .35rem;
+      background: #fff; border: 1px solid var(--line);
+      box-shadow: 0 14px 34px rgba(2, 6, 23, .22);
+    }
+    .profile-menu-head {
+      padding: .5rem .7rem .55rem; font-size: .8rem; color: var(--muted);
+      border-bottom: 1px solid var(--line); margin-bottom: .3rem;
+    }
+    .profile-menu-head b { color: var(--ink); }
+    .profile-dropdown .nav-dropdown-menu a,
+    .profile-dropdown .nav-dropdown-menu .logout-link {
+      display: flex; align-items: center; gap: .55rem; width: 100%;
+      color: #334155; padding: .55rem .7rem; border-radius: 8px;
+      text-align: left; font-size: .93rem; background: transparent;
+      border: none; cursor: pointer;
+    }
+    .profile-dropdown .nav-dropdown-menu a:hover { background: #eef2ff; color: var(--brand-700); }
+    .profile-dropdown .nav-dropdown-menu .logout-link:hover { background: #fef2f2; color: #b91c1c; }
+    .menu-sep { height: 1px; background: var(--line); margin: .3rem .2rem; }
+
+    /* Invoices dropdown: click to open (avoids the hover dead-zone gap) */
+    #invoices-dropdown:hover .nav-dropdown-menu { display: none; }
+    #invoices-dropdown.open .nav-dropdown-menu { display: block; }
+
+    /* Buttons */
+    button {
+      background: linear-gradient(180deg, #4f46e5, #4338ca);
+      box-shadow: 0 1px 2px rgba(2, 6, 23, .18);
+      font-weight: 500;
+    }
+    button:hover { background: linear-gradient(180deg, #4338ca, #3730a3); }
+    button:active { transform: translateY(1px); }
+    button.secondary { background: #fff; box-shadow: none; }
+    button.secondary:hover { background: #f8fafc; color: #111827; }
+
+    /* Cards */
+    .card {
+      border: 1px solid #eaeef4;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 10px 26px rgba(16, 24, 40, .06);
+    }
+
+    /* Inputs */
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--brand); box-shadow: 0 0 0 3px rgba(79, 70, 229, .15);
+    }
+
+    /* Tables */
+    th {
+      background: #f1f5f9; color: #334155; text-transform: uppercase;
+      font-size: .78rem; letter-spacing: .4px;
+    }
+    tbody tr:hover td { background: #f8fafc; }
+
+    /* Toast (new-document notification) */
+    .toast {
+      position: fixed; top: 18px; left: 50%;
+      transform: translateX(-50%) translateY(-24px);
+      background: #111827; color: #fff; padding: .7rem 1.15rem;
+      border-radius: 10px; box-shadow: 0 12px 32px rgba(2, 6, 23, .35);
+      font-size: .95rem; font-weight: 500; z-index: 12000;
+      opacity: 0; pointer-events: none;
+      transition: opacity .25s ease, transform .25s ease;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast::before { content: "📄  "; }
+
+    /* Auto-classified document type (suggested by OCR) — highlighted until changed */
+    select.suggested-type {
+      background: #ecfdf5; border-color: #34d399; color: #065f46; font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -156,17 +408,48 @@
     <span class="brand">Invoice App</span>
     <a href="#/home" data-route="#/home">Home</a>
     <a href="#/items" data-route="#/items">Item Master</a>
-    <a href="#/invoices" data-route="#/invoices">Invoice Creation</a>
-    <div class="nav-dropdown">
-      <button class="nav-dropbtn" type="button">Invoices ▾</button>
+    <div class="nav-dropdown" id="invoices-dropdown">
+      <button class="nav-dropbtn" id="invoices-dropbtn" type="button">Invoices ▾</button>
       <div class="nav-dropdown-menu">
         <a href="#/sales-invoice" data-route="#/sales-invoice">Sales Invoice</a>
         <a href="#/purchase-invoice" data-route="#/purchase-invoice">Purchase Invoice</a>
+        <a href="#/sales-return" data-route="#/sales-return">Sales Return</a>
+        <a href="#/purchase-return" data-route="#/purchase-return">Purchase Return</a>
+        <a href="#/receipts" data-route="#/receipts">Receipts</a>
+        <a href="#/payments" data-route="#/payments">Payments</a>
       </div>
     </div>
     <a href="#/documents" data-route="#/documents">Documents</a>
-    <button class="logout-link" id="logout-btn" type="button">Logout</button>
+
+    <!-- Profile (user avatar) dropdown -->
+    <div class="nav-dropdown profile-dropdown" id="profile-dropdown">
+      <button class="profile-avatar" id="profile-avatar-btn" type="button" aria-label="Profile" aria-haspopup="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" fill="currentColor"/>
+          <path d="M4 20c0-3.314 3.582-6 8-6s8 2.686 8 6" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="nav-dropdown-menu profile-menu">
+        <div class="profile-menu-head">Signed in as <b id="profile-menu-user">user</b></div>
+        <a href="#/invoices" data-route="#/invoices">🧾 Invoice Creation</a>
+        <a href="#/settings" data-route="#/settings">⚙️ Settings</a>
+        <div class="menu-sep"></div>
+        <button class="logout-link" id="logout-btn" type="button">⏻ Logout</button>
+      </div>
+    </div>
   </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Full-page blocking loader shown while the OCR→Qwen→GPT pipeline runs, so
+       nothing on the page can be clicked or edited until it finishes. -->
+  <div id="page-loader" class="page-loader" role="alertdialog" aria-live="assertive" aria-busy="true">
+    <div class="page-loader-box">
+      <div class="page-loader-spinner"></div>
+      <div id="page-loader-text" class="page-loader-text">Working…</div>
+      <div class="page-loader-sub">Please wait — do not close or edit this page.</div>
+    </div>
+  </div>
 
   <div class="content">
     <!-- Login -->
@@ -189,28 +472,113 @@
 
     <!-- Home -->
     <section id="home-page" class="page">
-      <div class="card">
-        <div class="header-row"><h1>Home</h1></div>
-        <p style="color:#4b5563; margin-top:0;">Scan PDFs and images from your computer to add them to the Documents page.</p>
-        <button id="home-scan-btn" type="button">Scan</button>
+      <div style="display:flex; flex-direction:column; gap:1.5rem; width:100%; max-width:640px;">
+        <div class="card" style="max-width:none;">
+          <div class="header-row"><h1>Home</h1></div>
+          <p style="color:#4b5563; margin-top:0;">Scan PDFs and images from your computer to add them to the Documents page.</p>
+          <button id="home-scan-btn" type="button">Scan</button>
+        </div>
       </div>
     </section>
 
-    <!-- Sales Invoice (scan) -->
-    <section id="sales-invoice-page" class="page">
-      <div class="card">
-        <div class="header-row"><h1>Sales Invoice</h1></div>
-        <p style="color:#4b5563; margin-top:0;">Scan sales invoices to add them to the Documents page.</p>
-        <button id="sales-scan-btn" type="button">Scan</button>
+    <!-- Settings (reachable only via the profile menu → Settings) -->
+    <section id="settings-page" class="page">
+      <div style="display:flex; flex-direction:column; gap:1.5rem; width:100%; max-width:640px;">
+        <div class="card" style="max-width:none;">
+          <div class="header-row"><h1>Company names</h1></div>
+          <p style="color:#4b5563; margin-top:0;">Your own company name(s). Used to auto-detect whether a document is a
+          <strong>Sales</strong> or <strong>Purchase</strong> (and Receipt vs Payment): if your company is the seller the
+          document is a Sale, if the buyer it's a Purchase. Add every name/spelling your company appears under
+          (legal name, trade name, abbreviations) so it's never confused.</p>
+          <ul id="profile-companies" class="profile-list"></ul>
+          <div style="display:flex; gap:.5rem; align-items:flex-start;">
+            <input id="profile-company-input" type="text" placeholder="add a company name…" style="margin:0; flex:1;">
+            <button id="profile-company-add" type="button">Add</button>
+          </div>
+        </div>
+
+        <div class="card" style="max-width:none;">
+          <div class="header-row"><h1>Settings</h1></div>
+          <p style="color:#4b5563; margin-top:0;">Configure the email addresses and WhatsApp numbers whose documents should be ingested.</p>
+
+          <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:.75rem 1rem; margin-bottom:1rem;">
+            <div style="font-size:.8rem; color:#0369a1; font-weight:600; text-transform:uppercase; letter-spacing:.3px;">System inbox — send invoices here</div>
+            <div id="gmail-address" style="font-size:1rem; color:#0c4a6e; margin:.25rem 0 .5rem;">Checking…</div>
+            <div style="font-size:.8rem; color:#0369a1; margin-bottom:.5rem;">📥 New invoices from allowed senders are pulled in automatically (about every 10 seconds). No action needed.</div>
+            <button id="gmail-check-btn" type="button" class="secondary" style="font-size:.85rem; padding:.4rem .8rem;">Refresh now (optional)</button>
+            <span id="gmail-check-status" style="font-size:.85rem; color:#4b5563; margin-left:.5rem;"></span>
+          </div>
+
+          <h3 style="margin:1rem 0 .5rem; font-size:1rem; color:#111827;">Allowed sender email addresses</h3>
+          <ul id="profile-emails" class="profile-list"></ul>
+          <div style="display:flex; gap:.5rem; align-items:flex-start;">
+            <input id="profile-email-input" type="email" placeholder="add an email address…" style="margin:0; flex:1;">
+            <button id="profile-email-add" type="button">Add</button>
+          </div>
+
+          <h3 style="margin:1.5rem 0 .5rem; font-size:1rem; color:#111827;">WhatsApp numbers</h3>
+          <ul id="profile-whatsapp" class="profile-list"></ul>
+          <div style="display:flex; gap:.5rem; align-items:flex-start;">
+            <input id="profile-whatsapp-input" type="text" placeholder="add a WhatsApp number…" style="margin:0; flex:1;">
+            <button id="profile-whatsapp-add" type="button">Add</button>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- Purchase Invoice (scan) -->
-    <section id="purchase-invoice-page" class="page">
-      <div class="card">
-        <div class="header-row"><h1>Purchase Invoice</h1></div>
-        <p style="color:#4b5563; margin-top:0;">Scan purchase invoices to add them to the Documents page.</p>
-        <button id="purchase-scan-btn" type="button">Scan</button>
+    <!-- Shared list page for each invoices type (Sales/Purchase Invoice, Sales/Purchase Return, Receipts, Payments) -->
+    <section id="type-list-page" class="page">
+      <div class="card wide">
+        <div class="header-row">
+          <h1 id="type-list-title">Documents</h1>
+          <div style="display:flex; gap:.5rem;">
+            <button id="type-list-scan-btn" type="button" class="secondary">Scan</button>
+            <button id="type-create-btn" type="button">Create New</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="type-table">
+            <thead>
+              <tr>
+                <th>Created Date</th>
+                <th>Document Name</th>
+                <th>Amount</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="type-tbody"></tbody>
+          </table>
+        </div>
+        <div id="type-empty" class="empty">Nothing here yet. Click "Create New" to add one.</div>
+      </div>
+    </section>
+
+    <!-- Shared "Create New" page: a schema-driven form for the current type.
+         When opened from a Documents row it becomes a two-pane view: the PDF on
+         the left, and the form (pre-filled from OCR→Qwen→GPT) on the right. -->
+    <section id="type-create-page" class="page">
+      <div class="card wide">
+        <div class="header-row">
+          <h1 id="type-create-title">Create New</h1>
+          <button id="type-scan-btn" type="button" class="secondary">Scan</button>
+        </div>
+        <p id="type-create-subtitle" style="color:#4b5563; margin-top:0;">Fill in the <span id="type-create-label">document</span> details below, or use Scan to auto-extract from a file.</p>
+        <div id="type-create-split" class="doc-split no-pdf">
+          <div id="doc-pdf-pane" class="doc-pdf-pane">
+            <div id="doc-pdf-holder" class="doc-pdf-holder"></div>
+          </div>
+          <div class="doc-form-pane">
+            <div id="doc-pipeline-status" class="pipeline-status"></div>
+            <form id="doc-form" autocomplete="off">
+              <div id="doc-form-body"></div>
+              <div class="row" style="margin-top:1.25rem;">
+                <button class="secondary" id="type-create-back" type="button">Back</button>
+                <button id="doc-form-save" type="submit">Save</button>
+              </div>
+              <div id="doc-form-message" class="message"></div>
+            </form>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -351,9 +719,11 @@
             <tr>
               <th>Upload Date and Time</th>
               <th>Document Name</th>
+              <th>Source</th>
               <th>Document Type</th>
-              <th>Result</th>
+              <th>OCR Status</th>
               <th>Action</th>
+              <th>Result</th>
             </tr>
           </thead>
           <tbody id="documents-tbody"></tbody>
@@ -395,12 +765,12 @@
       </div>
       <div class="modal-body" style="white-space:normal;">
         <table>
-          <thead><tr><th>File name</th><th>Size</th><th>Status</th></tr></thead>
+          <thead><tr><th>File name</th><th>Size</th><th>Status</th><th>Action</th></tr></thead>
           <tbody id="scan-tbody"></tbody>
         </table>
       </div>
       <div class="modal-foot">
-        <button id="scan-save-btn" type="button">Save</button>
+        <button id="scan-save-btn" type="button">Scan</button>
       </div>
     </div>
   </div>
@@ -412,13 +782,18 @@
         <h3 id="ocr-modal-title">Document Processing</h3>
         <button id="ocr-modal-close" class="modal-close" type="button" aria-label="Close">&times;</button>
       </div>
-      <div class="modal-tabs">
-        <button class="modal-tab active" type="button" data-tab="ocr">OCR</button>
-        <button class="modal-tab" type="button" data-tab="qwen">Qwen</button>
-        <button class="modal-tab" type="button" data-tab="gpt">GPT</button>
+      <div class="ocr-modal-split">
+        <div id="ocr-modal-pdf" class="ocr-modal-pdf doc-pdf-holder"></div>
+        <div class="ocr-modal-right">
+          <div class="modal-tabs">
+            <button class="modal-tab active" type="button" data-tab="ocr">OCR</button>
+            <button class="modal-tab" type="button" data-tab="qwen">Qwen</button>
+            <button class="modal-tab" type="button" data-tab="gpt">GPT</button>
+          </div>
+          <div id="ocr-modal-step" class="modal-step"></div>
+          <pre id="ocr-modal-body" class="modal-body"></pre>
+        </div>
       </div>
-      <div id="ocr-modal-step" class="modal-step"></div>
-      <pre id="ocr-modal-body" class="modal-body"></pre>
     </div>
   </div>
 
@@ -426,8 +801,19 @@
     const routes = {
       '#/login': 'login-page',
       '#/home': 'home-page',
-      '#/sales-invoice': 'sales-invoice-page',
-      '#/purchase-invoice': 'purchase-invoice-page',
+      '#/settings': 'settings-page',
+      '#/sales-invoice': 'type-list-page',
+      '#/sales-invoice/new': 'type-create-page',
+      '#/purchase-invoice': 'type-list-page',
+      '#/purchase-invoice/new': 'type-create-page',
+      '#/sales-return': 'type-list-page',
+      '#/sales-return/new': 'type-create-page',
+      '#/purchase-return': 'type-list-page',
+      '#/purchase-return/new': 'type-create-page',
+      '#/receipts': 'type-list-page',
+      '#/receipts/new': 'type-create-page',
+      '#/payments': 'type-list-page',
+      '#/payments/new': 'type-create-page',
       '#/items': 'items-page',
       '#/items/new': 'new-item-page',
       '#/invoices': 'invoice-page',
@@ -435,11 +821,115 @@
       '#/documents': 'documents-page',
       '#/documents/new': 'new-document-page',
     };
-    const protectedRoutes = ['#/home', '#/sales-invoice', '#/purchase-invoice', '#/items', '#/items/new', '#/invoices', '#/invoices/new', '#/documents', '#/documents/new'];
+    const protectedRoutes = ['#/home', '#/settings', '#/sales-invoice', '#/sales-invoice/new', '#/purchase-invoice', '#/purchase-invoice/new', '#/sales-return', '#/sales-return/new', '#/purchase-return', '#/purchase-return/new', '#/receipts', '#/receipts/new', '#/payments', '#/payments/new', '#/items', '#/items/new', '#/invoices', '#/invoices/new', '#/documents', '#/documents/new'];
+
+    // Maps each invoices route -> its document type; and type -> display label / route.
+    const TYPE_ROUTES = {
+      '#/sales-invoice': 'Sales Invoice',
+      '#/purchase-invoice': 'Purchase Invoice',
+      '#/sales-return': 'Sales Return',
+      '#/purchase-return': 'Purchase Return',
+      '#/receipts': 'Receipt',
+      '#/payments': 'Payment',
+    };
+    const TYPE_LABELS = {
+      'Sales Invoice': 'Sales Invoice', 'Purchase Invoice': 'Purchase Invoice',
+      'Sales Return': 'Sales Return', 'Purchase Return': 'Purchase Return',
+      'Receipt': 'Receipts', 'Payment': 'Payments',
+    };
+    const TYPE_TO_ROUTE = Object.fromEntries(Object.entries(TYPE_ROUTES).map(([r, t]) => [t, r]));
+    let currentTypeRoute = '#/sales-invoice';   // the list route currently shown
+    let typeCreateType = 'Sales Invoice';       // type the Create-New page will scan as
+    let typeCreateBackRoute = '#/sales-invoice';
 
     // Business document categories the user can classify a document as.
     const DOC_TYPES = ['Sales Invoice', 'Purchase Invoice', 'Sales Return',
-                       'Purchase Return', 'Credit Note', 'Debit Note'];
+                       'Purchase Return', 'Receipt', 'Payment'];
+
+    // ---- Per-document-type field schemas (mirror the Qwen/GPT extraction JSON) ----
+    // Values are only used for SHAPE: {} object -> subsection, [ {...} ] -> repeatable
+    // rows, anything else -> a text input. Forms render EMPTY (no prefill yet).
+    const DOC_SCHEMAS = {
+      invoice: {
+        invoice_id: '', invoice_type: '', invoice_number: '', invoice_date: '',
+        invoice_due_date: '', place_of_supply: '', reverse_charge: '', reference_no: '',
+        e_invoice: { irn: '', ack_no: '', ack_date: '' },
+        seller: {
+          name: '', trade_name: '', address: '', city: '', pincode: '', state: '',
+          country: '', gstin: '', pan: '', udyam_msme_no: '', tel: '', mobile: '',
+          email: '', authorised_signatory: '',
+          bank: { bank_name: '', account_holder: '', account_number: '', branch: '', ifsc: '' },
+        },
+        buyer: { name: '', address: '', city: '', pincode: '', state: '', country: '', gstin: '', mobile: '' },
+        consignee: { name: '', address: '', city: '', pincode: '', state: '', country: '', gstin: '', mobile: '' },
+        transport: { mode: '', carrier: '', vehicle_no: '', e_way_bill_no: '', gr_rr_no: '', station: '' },
+        line_items: [{
+          sno: '', description: '', description_detailed: '', hsn_sac: '', quantity: '',
+          unit: '', list_price: '', discount: '', rate: '', rate_incl_of_tax: '', gst_rate: '', amount: '',
+        }],
+        other_charges: [{ description: '', amount: '' }],
+        summary: { sub_total: '', round_off: '', grand_total: '', amount_in_words: '' },
+      },
+      creditDebit: {
+        credit_note_number: '', credit_note_date: '', notes: '', reference_number: '',
+        reference_no: '', subject: '', place_of_supply: '', reverse_charge: '',
+        e_invoice: { irn: '', ack_no: '', ack_date: '' },
+        original_voucher: { original_voucher_number: '', original_voucher_date: '' },
+        seller: {
+          name: '', trade_name: '', address: '', city: '', pincode: '', state: '',
+          country: '', gstin: '', pan: '', udyam_msme_no: '', tel: '', mobile: '',
+          email: '', authorised_signatory: '',
+          bank: { bank_name: '', account_holder: '', account_number: '', branch: '', ifsc: '' },
+        },
+        billing_details: { name: '', gstin: '', mobile: '', address: '', city: '', pincode: '', state: '', country: '' },
+        shipping_details: { name: '', gstin: '', mobile: '', address: '', city: '', pincode: '', state: '', country: '' },
+        transport: {
+          mode: '', transporter: '', vehicle_no: '', transporter_doc_no: '',
+          transporter_doc_date: '', e_way_bill_no: '', gr_rr_no: '', station: '',
+        },
+        line_items: [{
+          sno: '', item_description: '', description_detailed: '', account: '', hsn_sac: '',
+          quantity: '', unit: '', list_price: '', unit_price: '', rate_incl_of_tax: '',
+          disc: '', tax_percent: '', amount: '', sub_total: '',
+        }],
+        other_charges: [{ description: '', amount: '' }],
+        tax_summary: [{ tax_rate: '', taxable_amount: '', cgst: '', sgst: '', igst: '' }],
+        sundry_details: {
+          cgst: '', cgst_itc_none: '', sgst: '', sgst_itc_none: '', igst: '',
+          igst_export_sez: '', igst_itc_none: '', cess_on_gst: '', cess_on_gst_itc_none: '',
+          add_cess_on_gst: '', add_cess_on_gst_itc_none: '', discount: '',
+          freight_forwarding_charges: '', rounded_off_plus: '', rounded_off_minus: '',
+          tcs: '', tax_collected_at_source: '', tds_on_payment_purchase: '', tds_tcs: '',
+        },
+        footer: { total: '', amount_in_words: '' },
+      },
+      receipt: {
+        receipt_details: {
+          receipt_type: '', voucher_series: '', receipt_number: '', receipt_date: '',
+          receipt_time: '', table_no: '', party_size: '', server: '', account_name: '',
+          on_account_balance: '', payment_mode: '', instrument_no: '', reference_number: '',
+          amount_received: '', amount_in_words: '', bank_charges: '', tax_deducted: '',
+          total_pending: '', total_adjustable_amount: '', adjust_on_account: '',
+          amounts_refunded: '', amount_in_excess: '', notes: '',
+        },
+        issued_by: { name: '', address: '', city: '', pincode: '', state: '', country: '', gstin: '', pan: '' },
+        issued_to: { name: '', address: '', city: '', pincode: '', state: '', country: '', gstin: '', pan: '' },
+        line_items: [{ sno: '', item_description: '', quantity: '', unit_price: '', amount: '' }],
+        allocations: [{ date: '', ref_no: '', due_date: '', pending: '', amount_adjusted: '', balance: '', settle: '' }],
+        footer: {
+          sub_total: '', tax: '', tip: '', total_adjusted_receipt: '',
+          remaining_adjustable_amount: '', invoices_adjusted_count: '', total_receipt: '',
+        },
+      },
+    };
+
+    // Which schema each document type uses.
+    const TYPE_SCHEMA = {
+      'Sales Invoice': 'invoice', 'Purchase Invoice': 'invoice',
+      'Sales Return': 'creditDebit', 'Purchase Return': 'creditDebit',
+      'Credit Note': 'creditDebit', 'Debit Note': 'creditDebit',
+      'Receipt': 'receipt', 'Payment': 'receipt',
+    };
 
     const state = {
       user: null,
@@ -473,12 +963,16 @@
     }
 
     function render() {
-      let route = state.route;
-      if (protectedRoutes.includes(route) && !state.user) route = '#/login';
-      if (route === '#/login' && state.user) route = '#/invoices';
+      let full = state.route;
+      // Split an optional ?query off the hash path (e.g. #/sales-invoice/new?doc=6).
+      const qi = full.indexOf('?');
+      let route = qi >= 0 ? full.slice(0, qi) : full;
+      const params = new URLSearchParams(qi >= 0 ? full.slice(qi + 1) : '');
+      if (protectedRoutes.includes(route) && !state.user) { route = '#/login'; full = '#/login'; }
+      if (route === '#/login' && state.user) { route = '#/home'; full = '#/home'; }
 
-      state.route = route;
-      setHash(route);
+      state.route = full;
+      setHash(full);
       document.body.classList.toggle('authed', !!state.user);
 
       const pageId = routes[route] || 'login-page';
@@ -494,7 +988,14 @@
         renderInvoicesTable();
       }
       if (pageId === 'items-page') renderItemsTable();
-      if (pageId === 'documents-page') renderDocumentsTable();
+      if (pageId === 'documents-page') enterDocumentsPage();
+      if (pageId === 'settings-page') loadProfile();
+      if (pageId === 'type-list-page' && TYPE_ROUTES[route]) renderTypeList(TYPE_ROUTES[route], route);
+      if (pageId === 'type-create-page') {
+        const base = route.replace(/\/new$/, '');
+        if (TYPE_ROUTES[base]) setupTypeCreate(TYPE_ROUTES[base], base,
+          { docId: params.get('doc'), savedId: params.get('saved') });
+      }
       if (pageId === 'create-invoice-page') {
         renderItemsDropdown();
         document.getElementById('invoice-error').style.display = 'none';
@@ -529,6 +1030,34 @@
       }
     }
 
+    // Gate for the Documents page: OCR must finish BEFORE the page renders.
+    // On entry we pull fresh status; while any document is still pending/running
+    // we show the full-page blocking overlay and poll, and only render the
+    // documents table once every document's OCR is done (ok/failed).
+    function _anyOcrInProgress() {
+      return state.documents.some(d => {
+        const s = d.ocrStatus || 'pending';
+        return s === 'pending' || s === 'running';
+      });
+    }
+    async function enterDocumentsPage() {
+      await loadFromServer();                       // current OCR status before deciding
+      if (state.route !== '#/documents') return;
+      if (_anyOcrInProgress()) {
+        showOverlay('Running OCR — preparing documents…');
+        try {
+          while (state.route === '#/documents' && _anyOcrInProgress()) {
+            await new Promise(r => setTimeout(r, 2000));
+            await loadFromServer();
+          }
+        } finally {
+          hideOverlay();
+        }
+      }
+      if (state.route === '#/documents') renderDocumentsTable();
+    }
+
+    let _docsPollTimer = null;
     function renderDocumentsTable() {
       const tbody = document.getElementById('documents-tbody');
       const empty = document.getElementById('documents-empty');
@@ -539,10 +1068,23 @@
       // when the last row is deleted.
       table.style.display = '';
       empty.style.display = state.documents.length === 0 ? 'block' : 'none';
+      let anyPending = false;
       for (const doc of state.documents) {
         const tr = document.createElement('tr');
         const dtTd = document.createElement('td'); dtTd.textContent = doc.uploadDateTime || '—';
-        const nameTd = document.createElement('td'); nameTd.textContent = doc.name;
+
+        // Document Name — a hyperlink that opens the file itself in a new tab.
+        const nameTd = document.createElement('td');
+        if (doc.file) {
+          const a = document.createElement('a');
+          a.href = '/' + doc.file; a.textContent = doc.name;
+          a.target = '_blank'; a.rel = 'noopener';
+          nameTd.appendChild(a);
+        } else {
+          nameTd.textContent = doc.name;
+        }
+
+        const sourceTd = document.createElement('td'); sourceTd.textContent = doc.source || 'internal';
 
         // Document Type is a dropdown of the business categories. If the current
         // value isn't one of them (e.g. raw 'pdf'/'jpeg' from WhatsApp), a
@@ -550,7 +1092,12 @@
         const typeTd = document.createElement('td');
         const sel = document.createElement('select');
         sel.style.cssText = 'width:auto; margin:0; min-width:170px;';
-        if (!DOC_TYPES.includes(doc.docType)) {
+        // Effective pre-selection: a saved valid type wins; otherwise the type
+        // the vision model classified (shown highlighted as an auto-suggestion).
+        const hasType = DOC_TYPES.includes(doc.docType);
+        const suggested = (!hasType && DOC_TYPES.includes(doc.suggestedType)) ? doc.suggestedType : '';
+        const preselect = hasType ? doc.docType : suggested;
+        if (!preselect) {
           const ph = document.createElement('option');
           ph.value = '';
           ph.textContent = 'Select type…';
@@ -560,31 +1107,36 @@
         DOC_TYPES.forEach(t => {
           const o = document.createElement('option');
           o.value = t; o.textContent = t;
-          if (t === doc.docType) o.selected = true;
+          if (t === preselect) o.selected = true;
           sel.appendChild(o);
         });
+        if (suggested) {
+          sel.classList.add('suggested-type');
+          sel.title = 'Auto-classified by OCR — you can change it';
+          sel.addEventListener('change', () => sel.classList.remove('suggested-type'), { once: true });
+        }
         typeTd.appendChild(sel);
 
-        // Result column — opens the tabbed popup with stored OCR/Qwen/GPT output.
-        const resultTd = document.createElement('td');
-        const resultBtn = document.createElement('button');
-        resultBtn.type = 'button';
-        resultBtn.textContent = 'Result';
-        resultBtn.addEventListener('click', () => showResult(doc.id));
-        resultTd.appendChild(resultBtn);
+        // OCR Status — auto-run on arrival; shows a Retry button when it failed.
+        const ocrTd = document.createElement('td');
+        ocrTd.appendChild(renderOcrStatus(doc));
+        if (doc.ocrStatus === 'pending' || doc.ocrStatus === 'running') anyPending = true;
 
+        // Action — Create, Save(type), Delete, plus the processed badge.
         const actionTd = document.createElement('td');
-        if (doc.file) {
-          const view = document.createElement('a');
-          view.href = '/' + doc.file;
-          view.textContent = 'View';
-          view.target = '_blank';
-          view.rel = 'noopener';
-          view.style.marginRight = '0.75rem';
-          actionTd.appendChild(view);
-        }
+        const createBtn = document.createElement('button');
+        createBtn.type = 'button';
+        createBtn.textContent = 'Create';
+        createBtn.style.marginRight = '0.5rem';
+        createBtn.addEventListener('click', () => {
+          const type = sel.value;
+          if (!type) { alert('Please choose a document type first.'); return; }
+          navigate(`${TYPE_TO_ROUTE[type]}/new?doc=${doc.id}`);
+        });
+        actionTd.appendChild(createBtn);
         const saveBtn = document.createElement('button');
         saveBtn.type = 'button';
+        saveBtn.className = 'secondary';
         saveBtn.textContent = 'Save';
         saveBtn.style.marginRight = '0.5rem';
         saveBtn.addEventListener('click', () => saveDocumentType(doc.id, sel.value, saveBtn));
@@ -595,8 +1147,75 @@
         delBtn.textContent = 'Delete';
         delBtn.addEventListener('click', () => deleteDocument(doc.id));
         actionTd.appendChild(delBtn);
-        tr.append(dtTd, nameTd, typeTd, resultTd, actionTd);
+        if (doc.savedType) {
+          const badge = document.createElement('span');
+          badge.textContent = '✓ Saved as ' + doc.savedType;
+          badge.style.cssText = 'display:inline-block; margin-left:.5rem; font-size:.8rem; color:#065f46; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:6px; padding:.15rem .5rem;';
+          actionTd.appendChild(badge);
+        }
+
+        // Result — an eye icon (last column) that opens the OCR/Qwen/GPT popup.
+        const resultTd = document.createElement('td');
+        const eye = document.createElement('button');
+        eye.type = 'button'; eye.className = 'icon-btn';
+        eye.title = 'View OCR / Qwen / GPT result';
+        eye.setAttribute('aria-label', 'View result');
+        eye.textContent = '👁';
+        eye.addEventListener('click', () => showResult(doc.id));
+        resultTd.appendChild(eye);
+
+        tr.append(dtTd, nameTd, sourceTd, typeTd, ocrTd, actionTd, resultTd);
         tbody.appendChild(tr);
+      }
+      // Live-refresh the page while any document is still being OCR'd.
+      if (_docsPollTimer) { clearTimeout(_docsPollTimer); _docsPollTimer = null; }
+      if (anyPending) {
+        _docsPollTimer = setTimeout(async () => {
+          if (state.route !== '#/documents') return;
+          await loadFromServer();
+          if (state.route === '#/documents') renderDocumentsTable();
+        }, 4000);
+      }
+    }
+
+    // OCR status cell: a coloured label (+ Retry button when it has failed).
+    function renderOcrStatus(doc) {
+      const wrap = document.createElement('span');
+      const s = doc.ocrStatus || 'pending';
+      const map = {
+        pending: ['⏳ Pending', '#92400e'],
+        running: ['🔄 Running…', '#1e40af'],
+        ok:      ['✅ Done', '#065f46'],
+        failed:  ['❌ Failed', '#991b1b'],
+      };
+      const [label, color] = map[s] || map.pending;
+      const badge = document.createElement('span');
+      badge.textContent = label; badge.style.color = color; badge.style.fontSize = '.9rem';
+      if (s === 'failed' && doc.ocrError) badge.title = doc.ocrError;
+      wrap.appendChild(badge);
+      if (s === 'failed') {
+        const retry = document.createElement('button');
+        retry.type = 'button'; retry.className = 'secondary small';
+        retry.textContent = 'Retry'; retry.style.marginLeft = '.5rem';
+        retry.addEventListener('click', () => retryOcr(doc.id, retry));
+        wrap.appendChild(retry);
+      }
+      return wrap;
+    }
+
+    async function retryOcr(id, btn) {
+      if (btn) { btn.disabled = true; btn.textContent = 'Queued…'; }
+      try {
+        const res = await fetch('/api/documents/ocr-retry', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'retry failed');
+        await loadFromServer();
+        renderDocumentsTable();
+      } catch (err) {
+        alert('Failed to retry OCR: ' + err.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
       }
     }
 
@@ -662,6 +1281,8 @@
       modalContent.qwen = '⏳ Waiting for OCR…';
       modalContent.gpt = '⏳ Waiting for OCR…';
       openModal('Document Processing', 'ocr');
+      const _pdoc = state.documents.find(d => d.id === id);
+      showPdf(_pdoc ? _pdoc.file : '', 'ocr-modal-pdf');
 
       // STEP 1 — OCR the document's file via PP-OCRv5.
       setStep('Step 1 of 3 · Running OCR (PP-OCRv5)…');
@@ -691,7 +1312,7 @@
           : (data.response && data.response.trim() ? data.response : '(Qwen returned an empty response.)'));
       } catch (err) { setTabContent('qwen', '⚠️ Could not reach the server (Qwen): ' + err.message); }
 
-      // STEP 3 — GPT-4.1-mini extraction with the same system prompt.
+      // STEP 3 — GPT-4.1-mini auditor: its own per-type GPT prompt, fed the OCR + Qwen output.
       setStep('Step 3 of 3 · Extracting with GPT-4.1-mini…');
       setTabContent('gpt', '⏳ Extracting with GPT-4.1-mini…');
       try {
@@ -712,6 +1333,8 @@
     async function showResult(id) {
       modalContent.ocr = modalContent.qwen = modalContent.gpt = '(loading…)';
       openModal('Document Result', 'ocr');
+      const rdoc = state.documents.find(d => d.id === id);
+      showPdf(rdoc ? rdoc.file : '', 'ocr-modal-pdf');   // PDF on the left, like Create
       setStep('');
       try {
         const res = await fetch('/api/documents/result?id=' + encodeURIComponent(id));
@@ -729,10 +1352,448 @@
         const res = await fetch('/api/documents?id=' + encodeURIComponent(id), { method: 'DELETE' });
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'delete failed');
         state.documents = state.documents.filter(d => d.id !== id);
-        renderDocumentsTable();
+        render();   // re-render whichever list (Documents or a type list) is showing
       } catch (err) {
         alert('Failed to delete document: ' + err.message);
       }
+    }
+
+    // Format a money amount for the invoices tables.
+    function formatAmount(v) {
+      if (v === null || v === undefined || v === '') return '—';
+      const n = Number(v);
+      if (!Number.isNaN(n)) return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return String(v);
+    }
+
+    async function refreshDocuments() {
+      try {
+        const docs = await (await fetch('/api/documents')).json();
+        if (Array.isArray(docs)) state.documents = docs;
+      } catch (_) { /* keep current on error */ }
+    }
+
+    // Render the shared list page for one document type — table STRUCTURE only.
+    // (Intentionally does not pull existing documents from the store.)
+    let currentListType = 'Sales Invoice';   // type shown on the current list page
+    async function renderTypeList(type, route) {
+      currentTypeRoute = route;
+      currentListType = type;
+      document.getElementById('type-list-title').textContent = TYPE_LABELS[type] || type;
+      const tbody = document.getElementById('type-tbody');
+      const empty = document.getElementById('type-empty');
+      tbody.innerHTML = '';
+      let rows = [];
+      try {
+        rows = await fetch('/api/saved?type=' + encodeURIComponent(type)).then(r => r.json());
+      } catch (_) { rows = []; }
+      if (!Array.isArray(rows) || rows.length === 0) {
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+      for (const rec of rows) {
+        const tr = document.createElement('tr');
+        const dt = document.createElement('td'); dt.textContent = rec.createdAt || '—';
+        const nm = document.createElement('td'); nm.textContent = rec.documentName || '—';
+        const amt = document.createElement('td'); amt.textContent = formatAmount(rec.amount);
+        const act = document.createElement('td');
+        const view = document.createElement('button');
+        view.type = 'button'; view.textContent = 'View'; view.style.marginRight = '0.5rem';
+        view.addEventListener('click', () => navigate(`${route}/new?saved=${rec.id}`));
+        const del = document.createElement('button');
+        del.type = 'button'; del.className = 'secondary'; del.textContent = 'Delete';
+        del.addEventListener('click', () => deleteSaved(type, rec.id, route));
+        act.append(view, del);
+        tr.append(dt, nm, amt, act);
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function deleteSaved(type, id, route) {
+      if (!confirm('Delete this record?')) return;
+      try {
+        const res = await fetch(`/api/saved?type=${encodeURIComponent(type)}&id=${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'delete failed');
+        renderTypeList(type, route);
+      } catch (err) {
+        alert('Failed to delete: ' + err.message);
+      }
+    }
+
+    // Context for the current create/view page (consumed by Save).
+    let typeCreateContext = { type: 'Sales Invoice', docId: null, savedId: null, documentName: '' };
+
+    // Prepare the shared Create page. Modes:
+    //   opts.docId   -> two-pane: PDF on left, form pre-filled via OCR→Qwen→GPT.
+    //   opts.savedId -> single pane: re-open an existing saved record (editable).
+    //   neither      -> single pane: blank manual form.
+    function setupTypeCreate(type, baseRoute, opts) {
+      opts = opts || {};
+      typeCreateType = type;
+      typeCreateBackRoute = baseRoute;
+      const label = TYPE_LABELS[type] || type;
+      document.getElementById('type-create-label').textContent = label;
+      const msg = document.getElementById('doc-form-message');
+      msg.style.display = 'none';
+      const split = document.getElementById('type-create-split');
+      const subtitle = document.getElementById('type-create-subtitle');
+      const scanBtn = document.getElementById('type-scan-btn');
+      // The Save button is a persistent element; always re-enable it when a
+      // create page opens (a prior successful save left it disabled/"Saving…").
+      const saveBtn = document.getElementById('doc-form-save');
+      saveBtn.disabled = false; saveBtn.textContent = 'Save';
+      setPipelineStatus('');
+      hideOverlay();
+      renderDocForm(type);   // always start from an empty schema form
+
+      const docId = opts.docId ? parseInt(opts.docId, 10) : null;
+      const savedId = opts.savedId ? parseInt(opts.savedId, 10) : null;
+
+      if (docId) {
+        // --- Two-pane create-from-document ---
+        const doc = state.documents.find(d => d.id === docId);
+        typeCreateContext = { type, docId, savedId: null, documentName: doc ? doc.name : '' };
+        document.getElementById('type-create-title').textContent = 'New ' + label;
+        subtitle.style.display = 'none';
+        scanBtn.style.display = 'none';
+        split.classList.remove('no-pdf');
+        showPdf(doc ? doc.file : '');
+        loadExtractionIntoForm(docId, type);
+      } else if (savedId) {
+        // --- View / edit an existing saved record ---
+        typeCreateContext = { type, docId: null, savedId, documentName: '' };
+        document.getElementById('type-create-title').textContent = label + ' — View';
+        subtitle.style.display = 'none';
+        scanBtn.style.display = 'none';
+        split.classList.add('no-pdf');
+        loadSavedIntoForm(type, savedId);
+      } else {
+        // --- Blank manual create ---
+        typeCreateContext = { type, docId: null, savedId: null, documentName: '' };
+        document.getElementById('type-create-title').textContent = 'New ' + label;
+        subtitle.style.display = '';
+        scanBtn.style.display = '';
+        split.classList.add('no-pdf');
+      }
+    }
+
+    // Show the document file (PDF via iframe, image via <img>) in the left pane.
+    function showPdf(file, holderId = 'doc-pdf-holder') {
+      const holder = document.getElementById(holderId);
+      if (!holder) return;
+      holder.innerHTML = '';
+      if (!file) { holder.innerHTML = '<div class="doc-pdf-steps">No file attached to this document.</div>'; return; }
+      const url = '/' + file;
+      const ext = (file.split('.').pop() || '').toLowerCase();
+      if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff'].includes(ext)) {
+        const img = document.createElement('img'); img.src = url; img.alt = 'document';
+        holder.appendChild(img);
+      } else {
+        const frame = document.createElement('iframe'); frame.src = url; frame.title = 'document';
+        holder.appendChild(frame);
+      }
+    }
+
+    // Pipeline status banner (spinner + step text; optional error/retry).
+    function setPipelineStatus(text, kind, onRetry) {
+      const el = document.getElementById('doc-pipeline-status');
+      if (!el) return;
+      el.className = 'pipeline-status';
+      if (!text) { el.innerHTML = ''; return; }
+      el.classList.add('show');
+      if (kind) el.classList.add(kind);
+      el.innerHTML = '';
+      if (kind !== 'is-error' && kind !== 'is-done') el.appendChild(_el('span', 'pipeline-spinner'));
+      el.appendChild(_el('span', null, text));
+      if (onRetry) {
+        const b = _el('button', 'retry-btn', 'Retry'); b.type = 'button';
+        b.addEventListener('click', onRetry); el.appendChild(b);
+      }
+    }
+
+    // Full-page blocking loader — nothing on the page is clickable while shown.
+    function showOverlay(text) {
+      document.getElementById('page-loader-text').textContent = text || 'Working…';
+      document.getElementById('page-loader').classList.add('show');
+    }
+    function updateOverlay(text) {
+      document.getElementById('page-loader-text').textContent = text;
+    }
+    function hideOverlay() {
+      document.getElementById('page-loader').classList.remove('show');
+    }
+
+    // Best-effort parse of a model JSON blob (strips code fences / <think>).
+    function parseModelJson(s) {
+      if (!s || typeof s !== 'string') return null;
+      s = s.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/```json/g, '').replace(/```/g, '');
+      const a = s.indexOf('{'), b = s.lastIndexOf('}');
+      if (a === -1 || b === -1) return null;
+      try { return JSON.parse(s.slice(a, b + 1)); } catch (_) { return null; }
+    }
+
+    // Run (or reuse cached) OCR→Qwen→GPT for a document, then pre-fill the form
+    // from the GPT result (falling back to Qwen). On failure: show which step
+    // failed + a Retry, and leave the form empty so the user can type manually.
+    async function loadExtractionIntoForm(docId, type) {
+      const post = (url, body) => fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(async r => { const d = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, d }; });
+
+      setPipelineStatus('');
+      showOverlay('Loading…');
+      let cached = {};
+      try { cached = await fetch('/api/documents/result?id=' + docId).then(r => r.json()); } catch (_) { cached = {}; }
+
+      // If we already have a final GPT (or Qwen) extraction, use it — no re-run.
+      const finalCached = parseModelJson(cached.gpt) || parseModelJson(cached.qwen);
+      if (finalCached) {
+        fillDocForm(finalCached);
+        hideOverlay();
+        setPipelineStatus('Loaded from a previous extraction — review and edit below.', 'is-done');
+        return;
+      }
+
+      try {
+        // STEP 1 — OCR (reuse cached text if present).
+        let ocrText = cached.ocr || '';
+        if (!ocrText) {
+          updateOverlay('Step 1 of 3 · Running OCR (PP-OCRv5)…');
+          const r = await post('/api/documents/ocr', { id: docId });
+          if (!r.ok || r.d.error) return failStep('OCR', r.d.error || ('HTTP ' + r.status), () => loadExtractionIntoForm(docId, type));
+          ocrText = r.d.text || '';
+        }
+
+        // STEP 2 — Qwen extraction (reuse cached if present).
+        if (!cached.qwen) {
+          updateOverlay('Step 2 of 3 · Extracting with Qwen…');
+          const r = await post('/api/documents/extract', { id: docId, docType: type, text: ocrText });
+          if (!r.ok || r.d.error) return failStep('Qwen', r.d.error || ('HTTP ' + r.status), () => loadExtractionIntoForm(docId, type));
+        }
+
+        // STEP 3 — GPT-4.1-mini auditor (final).
+        updateOverlay('Step 3 of 3 · Auditing with GPT-4.1-mini…');
+        const r = await post('/api/documents/extract-gpt', { id: docId, docType: type, text: ocrText });
+        if (!r.ok || r.d.error) return failStep('GPT', r.d.error || ('HTTP ' + r.status), () => loadExtractionIntoForm(docId, type));
+
+        const parsed = parseModelJson(r.d.response) || parseModelJson(cached.qwen);
+        if (!parsed) return failStep('GPT', 'could not parse the model output as JSON', () => loadExtractionIntoForm(docId, type));
+        fillDocForm(parsed);
+        hideOverlay();
+        setPipelineStatus('Extraction complete — review and edit below.', 'is-done');
+      } catch (err) {
+        failStep('pipeline', err.message, () => loadExtractionIntoForm(docId, type));
+      }
+
+      function failStep(step, detail, retry) {
+        hideOverlay();   // unblock the page so the user can fill in manually
+        setPipelineStatus(`${step} step failed: ${detail}. You can fill the form manually or retry.`, 'is-error', retry);
+      }
+    }
+
+    // Load an existing saved record into the (already empty) form.
+    async function loadSavedIntoForm(type, savedId) {
+      setPipelineStatus('Loading saved record…');
+      try {
+        const rec = await fetch(`/api/saved?type=${encodeURIComponent(type)}&id=${savedId}`).then(r => r.json());
+        typeCreateContext.documentName = rec.documentName || '';
+        fillDocForm(rec.data || {});
+        // Show the source document's PDF on the left, same as the Create view.
+        const split = document.getElementById('type-create-split');
+        let file = '';
+        if (rec.sourceDocId !== undefined && rec.sourceDocId !== null && rec.sourceDocId !== '') {
+          if (!state.documents.length) { try { await loadFromServer(); } catch (_) {} }
+          const sd = state.documents.find(d => String(d.id) === String(rec.sourceDocId));
+          file = sd ? sd.file : '';
+        }
+        if (file) { split.classList.remove('no-pdf'); showPdf(file); }
+        else { split.classList.add('no-pdf'); }
+        setPipelineStatus('');
+      } catch (err) {
+        setPipelineStatus('Could not load the saved record: ' + err.message, 'is-error');
+      }
+    }
+
+    // Pre-fill the current form from a nested data object: grow arrays to fit,
+    // then set every matching input by its data-path.
+    function fillDocForm(data) {
+      const flat = {};
+      (function walk(obj, prefix) {
+        if (Array.isArray(obj)) {
+          obj.forEach((v, i) => walk(v, `${prefix}[${i}]`));
+        } else if (obj && typeof obj === 'object') {
+          for (const [k, v] of Object.entries(obj)) walk(v, prefix ? `${prefix}.${k}` : k);
+        } else {
+          flat[prefix] = obj;
+        }
+      })(data, '');
+
+      // Grow each array section to hold as many rows as the data has.
+      document.querySelectorAll('#doc-form-body [data-array-path]').forEach(box => {
+        const p = box.dataset.arrayPath;
+        const arr = _getByPath(data, p);
+        if (Array.isArray(arr) && arr.length > 1 && typeof box._addRow === 'function') {
+          for (let i = 1; i < arr.length; i++) box._addRow();
+        }
+      });
+
+      // Set inputs.
+      document.querySelectorAll('#doc-form-body [data-path]').forEach(inp => {
+        const v = flat[inp.dataset.path];
+        if (v !== undefined && v !== null) inp.value = v;
+      });
+    }
+    function _getByPath(root, path) {
+      const tokens = path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+      let node = root;
+      for (const t of tokens) { node = node == null ? undefined : node[t]; }
+      return node;
+    }
+
+    // Derive a document name for a saved record when none came from a file.
+    function deriveDocName(type, data) {
+      return (data.invoice_number || data.credit_note_number
+        || (data.receipt_details && data.receipt_details.receipt_number) || '').toString().trim()
+        || ('Untitled ' + (TYPE_LABELS[type] || type));
+    }
+
+    // ---------- Schema-driven form rendering ----------
+    // Per-word rendering (acronyms upper-cased, a few special cases).
+    const _WORD_MAP = {
+      gstin: 'GSTIN', gst: 'GST', pan: 'PAN', irn: 'IRN', hsn: 'HSN', sac: 'SAC',
+      igst: 'IGST', cgst: 'CGST', sgst: 'SGST', ifsc: 'IFSC', tcs: 'TCS', tds: 'TDS',
+      itc: 'ITC', sez: 'SEZ', cess: 'Cess', msme: 'MSME', id: 'ID', no: 'No.', tel: 'Tel',
+    };
+    // Whole-key overrides where per-word rules aren't enough.
+    const _LABEL_OVERRIDES = {
+      hsn_sac: 'HSN / SAC', gr_rr_no: 'GR / RR No.', e_way_bill_no: 'E-Way Bill No.',
+      udyam_msme_no: 'Udyam / MSME No.', sno: 'S. No.', ack_no: 'Ack. No.',
+      ack_date: 'Ack. Date', e_invoice: 'E-Invoice',
+      rate_incl_of_tax: 'Rate (incl. of Tax)', tds_tcs: 'TDS / TCS',
+      cgst_itc_none: 'CGST (ITC None)', sgst_itc_none: 'SGST (ITC None)',
+      igst_itc_none: 'IGST (ITC None)', igst_export_sez: 'IGST (Export / SEZ)',
+      rate_incl_of_tax_pct: 'Rate (incl. of Tax)',
+    };
+    function humanize(key) {
+      if (_LABEL_OVERRIDES[key]) return _LABEL_OVERRIDES[key];
+      return key.split('_').map(w =>
+        _WORD_MAP[w] || (w.charAt(0).toUpperCase() + w.slice(1))
+      ).join(' ');
+    }
+    function _el(tag, cls, text) {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    }
+    function _field(path, label) {
+      const wrap = _el('label', 'form-field');
+      wrap.appendChild(_el('span', null, label));
+      const input = _el('input');
+      input.type = 'text';
+      input.dataset.path = path;
+      wrap.appendChild(input);
+      return wrap;
+    }
+    // Fill a container with an object's scalars (in a grid) then its nested groups.
+    function _fillObject(container, obj, path) {
+      const grid = _el('div', 'form-grid');
+      const nested = [];
+      for (const [k, v] of Object.entries(obj)) {
+        const p = path ? path + '.' + k : k;
+        if (Array.isArray(v)) nested.push(_arraySection(humanize(k), v[0] || {}, p, 'form-subsection'));
+        else if (v && typeof v === 'object') nested.push(_objSection(humanize(k), v, p));
+        else grid.appendChild(_field(p, humanize(k)));
+      }
+      if (grid.children.length) container.appendChild(grid);
+      nested.forEach(n => container.appendChild(n));
+    }
+    function _objSection(title, obj, path) {
+      const box = _el('div', 'form-subsection');
+      box.appendChild(_el('h4', 'form-subsection-title', title));
+      _fillObject(box, obj, path);
+      return box;
+    }
+    // A repeatable-rows section for an array of flat objects.
+    function _arraySection(title, template, path, boxClass) {
+      const box = _el('div', boxClass || 'form-array');
+      box.dataset.arrayPath = path;   // so prefill can locate + grow this array
+      if (boxClass === 'form-subsection') box.appendChild(_el('h4', 'form-subsection-title', title));
+      const rows = _el('div', 'form-array-rows');
+      box.appendChild(rows);
+      let count = 0;
+      const addRow = () => {
+        const idx = count++;
+        const row = _el('div', 'form-array-row');
+        row.appendChild(_el('div', 'row-index', '#' + (idx + 1)));
+        const rm = _el('button', 'row-remove', 'Remove');
+        rm.type = 'button';
+        rm.addEventListener('click', () => row.remove());
+        row.appendChild(rm);
+        const grid = _el('div', 'form-grid');
+        for (const [k] of Object.entries(template)) grid.appendChild(_field(`${path}[${idx}].${k}`, humanize(k)));
+        row.appendChild(grid);
+        rows.appendChild(row);
+      };
+      const add = _el('button', 'secondary small form-array-add', '+ Add row');
+      add.type = 'button';
+      add.addEventListener('click', addRow);
+      addRow();               // one empty row to start
+      box.appendChild(add);
+      box._addRow = addRow;   // referenced by fillDocForm to add extra rows
+      return box;
+    }
+    // Render the whole form for a document type into #doc-form-body.
+    function renderDocForm(type) {
+      const body = document.getElementById('doc-form-body');
+      body.innerHTML = '';
+      const schema = DOC_SCHEMAS[TYPE_SCHEMA[type] || 'invoice'];
+      const topScalars = {};
+      for (const [k, v] of Object.entries(schema)) {
+        if (Array.isArray(v)) {
+          const sec = _el('div', 'form-section');
+          sec.appendChild(_el('h3', 'form-section-title', humanize(k)));
+          sec.appendChild(_arraySection(humanize(k), v[0] || {}, k, 'form-array'));
+          body.appendChild(sec);
+        } else if (v && typeof v === 'object') {
+          const sec = _el('div', 'form-section');
+          sec.appendChild(_el('h3', 'form-section-title', humanize(k)));
+          _fillObject(sec, v, k);
+          body.appendChild(sec);
+        } else {
+          topScalars[k] = v;
+        }
+      }
+      // Group the top-level scalar fields (invoice_number, dates, …) under "Details".
+      if (Object.keys(topScalars).length) {
+        const sec = _el('div', 'form-section');
+        sec.appendChild(_el('h3', 'form-section-title', 'Details'));
+        const grid = _el('div', 'form-grid');
+        for (const k of Object.keys(topScalars)) grid.appendChild(_field(k, humanize(k)));
+        sec.appendChild(grid);
+        body.insertBefore(sec, body.firstChild);   // show Details first
+      }
+    }
+    // Gather the form into a nested object (used later when wiring the backend).
+    function collectDocForm() {
+      const data = {};
+      document.querySelectorAll('#doc-form-body [data-path]').forEach(inp => {
+        _setPath(data, inp.dataset.path, inp.value);
+      });
+      return data;
+    }
+    function _setPath(root, path, value) {
+      const tokens = path.replace(/\[(\d+)\]/g, '.$1').split('.');
+      let node = root;
+      for (let i = 0; i < tokens.length - 1; i++) {
+        const key = tokens[i];
+        const nextIsIndex = /^\d+$/.test(tokens[i + 1]);
+        if (node[key] == null) node[key] = nextIsIndex ? [] : {};
+        node = node[key];
+      }
+      node[tokens[tokens.length - 1]] = value;
     }
 
     function renderInvoicesTable() {
@@ -797,11 +1858,42 @@
       if (!username || !password) { loginError.style.display = 'block'; return; }
       loginError.style.display = 'none';
       state.user = username;
-      navigate('#/invoices');
+      navigate('#/home');
+    });
+
+    // Profile avatar dropdown — click to toggle, close on outside click / item click.
+    const profileDropdown = document.getElementById('profile-dropdown');
+    document.getElementById('profile-avatar-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const opening = !profileDropdown.classList.contains('open');
+      profileDropdown.classList.toggle('open');
+      if (opening) {
+        const nameEl = document.getElementById('profile-menu-user');
+        if (nameEl) nameEl.textContent = state.user || 'user';
+      }
+    });
+    profileDropdown.querySelectorAll('.nav-dropdown-menu a').forEach(a =>
+      a.addEventListener('click', () => profileDropdown.classList.remove('open')));
+    document.addEventListener('click', (e) => {
+      if (!profileDropdown.contains(e.target)) profileDropdown.classList.remove('open');
+    });
+
+    // Invoices dropdown — click to open, stays open until an item / outside click.
+    const invoicesDropdown = document.getElementById('invoices-dropdown');
+    document.getElementById('invoices-dropbtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      invoicesDropdown.classList.toggle('open');
+      profileDropdown.classList.remove('open');   // don't leave both open
+    });
+    invoicesDropdown.querySelectorAll('.nav-dropdown-menu a').forEach(a =>
+      a.addEventListener('click', () => invoicesDropdown.classList.remove('open')));
+    document.addEventListener('click', (e) => {
+      if (!invoicesDropdown.contains(e.target)) invoicesDropdown.classList.remove('open');
     });
 
     // Logout
     document.getElementById('logout-btn').addEventListener('click', () => {
+      profileDropdown.classList.remove('open');
       state.user = null;
       document.getElementById('login-form').reset();
       navigate('#/login');
@@ -855,8 +1947,42 @@
       scanInput.click();
     }
     document.getElementById('home-scan-btn').addEventListener('click', () => startScan(''));
-    document.getElementById('sales-scan-btn').addEventListener('click', () => startScan('Sales Invoice'));
-    document.getElementById('purchase-scan-btn').addEventListener('click', () => startScan('Purchase Invoice'));
+    // Invoices type pages: "Create New" opens the create page; its Scan button tags the current type.
+    document.getElementById('type-create-btn').addEventListener('click', () => navigate(currentTypeRoute + '/new'));
+    document.getElementById('type-list-scan-btn').addEventListener('click', () => startScan(currentListType));
+    document.getElementById('type-create-back').addEventListener('click', () => navigate(typeCreateBackRoute || '#/home'));
+    document.getElementById('type-scan-btn').addEventListener('click', () => startScan(typeCreateType));
+    document.getElementById('doc-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('doc-form-save');
+      if (btn.disabled) return;               // ignore double-submits
+      btn.disabled = true; btn.textContent = 'Saving…';
+      showOverlay('Saving…');
+      let done = false;
+      try {
+        const ctx = typeCreateContext;
+        const data = collectDocForm();
+        const documentName = ctx.documentName || deriveDocName(ctx.type, data);
+        const res = await fetch('/api/saved', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: ctx.type, documentName, sourceDocId: ctx.docId || '', data,
+          }),
+        });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(out.error || ('HTTP ' + res.status));
+        await loadFromServer();               // refresh documents (saved status)
+        done = true;
+        navigate(TYPE_TO_ROUTE[ctx.type] || '#/home');   // go to that type's table
+      } catch (err) {
+        alert('Failed to save: ' + err.message);
+      } finally {
+        // Always restore the button; success navigates away but the element persists.
+        hideOverlay();
+        btn.disabled = false; btn.textContent = 'Save';
+        if (done) { /* saved & navigated */ }
+      }
+    });
     scanInput.addEventListener('change', () => handleScanFiles([...scanInput.files]));
 
     function formatSize(bytes) {
@@ -880,13 +2006,25 @@
       saveBtn.disabled = true;
       openScanModal();
 
-      // one row per file, with a live status cell
+      const refreshBtn = () => { saveBtn.disabled = scanStaged.length === 0; };
+
+      // one row per file, with a live status cell and a delete action
       const rows = files.map(f => {
         const tr = document.createElement('tr');
         const n = document.createElement('td'); n.textContent = f.name;
         const s = document.createElement('td'); s.textContent = formatSize(f.size);
         const st = document.createElement('td'); st.textContent = '⏳ Uploading…';
-        tr.append(n, s, st);
+        const act = document.createElement('td');
+        const del = document.createElement('button');
+        del.type = 'button'; del.className = 'secondary'; del.textContent = 'Delete';
+        del.addEventListener('click', () => {
+          // Drop this file from the staged list and remove its row.
+          scanStaged = scanStaged.filter(x => x.staged !== st);
+          tr.remove();
+          refreshBtn();
+        });
+        act.appendChild(del);
+        tr.append(n, s, st, act);
         tbody.appendChild(tr);
         return st;
       });
@@ -901,7 +2039,7 @@
           const d = await res.json().catch(() => ({}));
           if (res.ok && d.ok) {
             rows[i].textContent = '✅ Success';
-            scanStaged.push({ name: f.name, file: d.file });
+            scanStaged.push({ name: f.name, file: d.file, staged: rows[i] });
           } else {
             rows[i].textContent = '❌ Failed: ' + (d.error || ('HTTP ' + res.status));
           }
@@ -909,26 +2047,147 @@
           rows[i].textContent = '❌ Failed: ' + err.message;
         }
       }
-      saveBtn.disabled = scanStaged.length === 0;
+      refreshBtn();
     }
 
     // Save: commit the successfully-uploaded files as documents, then show them.
     document.getElementById('scan-save-btn').addEventListener('click', async () => {
       if (!scanStaged.length) { alert('No successfully uploaded files to save.'); return; }
+      let commitType = scanDocType;
+      // Only when scanning from a SPECIFIC type page (scanDocType set) do we ask the
+      // classifier and warn on a mismatch. Home / email / WhatsApp have no intended
+      // type (scanDocType === '') so they skip this entirely.
+      if (scanDocType) {
+        const saveBtn = document.getElementById('scan-save-btn');
+        const orig = saveBtn.textContent;
+        saveBtn.disabled = true; saveBtn.textContent = 'Checking type…';
+        let suggested = '';
+        try {
+          for (const x of scanStaged) {
+            const r = await fetch('/api/documents/classify', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ file: x.file }),
+            });
+            const d = await r.json().catch(() => ({}));
+            if (d.suggested_type && d.suggested_type !== scanDocType) { suggested = d.suggested_type; break; }
+          }
+        } catch (_) { /* classifier is best-effort; on error just proceed */ }
+        saveBtn.disabled = false; saveBtn.textContent = orig;
+        if (suggested) {
+          const keep = confirm(
+            `We think this document is a “${suggested}”, not a “${scanDocType}”.\n\n` +
+            `• OK  — add it as “${scanDocType}” (your choice)\n` +
+            `• Cancel — switch it to “${suggested}”`);
+          if (!keep) commitType = suggested;
+        }
+      }
       try {
         const res = await fetch('/api/documents/commit', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ docType: scanDocType, files: scanStaged }),
+          body: JSON.stringify({ docType: commitType,
+            files: scanStaged.map(x => ({ name: x.name, file: x.file })) }),
         });
         const d = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
         (d.created || []).forEach(doc => state.documents.push(doc));
         scanStaged = [];
         closeScanModal();
-        navigate('#/documents');   // committed documents now appear here
+        navigate('#/documents');   // committed documents appear on the Documents page
       } catch (err) {
         alert('Failed to save documents: ' + err.message);
       }
+    });
+
+    // --- Profile (Home page): separate email + WhatsApp lists ---
+    function renderAllProfile(p) {
+      renderProfileList('emails', p.emails || []);
+      renderProfileList('whatsapp', p.whatsapp || []);
+      renderProfileList('companies', p.companies || []);
+    }
+    async function loadProfile() {
+      try {
+        const res = await fetch('/api/profile');
+        const p = await res.json();
+        renderAllProfile(p);
+      } catch (err) { /* keep current lists on error */ }
+      // system Gmail inbox address
+      try {
+        const g = await (await fetch('/api/gmail/address')).json();
+        const el = document.getElementById('gmail-address');
+        el.textContent = !g.configured ? 'Not configured yet (set up Gmail to enable email ingestion)'
+          : (g.address || ('⚠️ ' + (g.error || 'could not read address')));
+      } catch (err) {
+        document.getElementById('gmail-address').textContent = 'Unavailable';
+      }
+    }
+    document.getElementById('gmail-check-btn').addEventListener('click', async () => {
+      const status = document.getElementById('gmail-check-status');
+      status.textContent = 'Checking…';
+      try {
+        const r = await (await fetch('/api/gmail/poll', { method: 'POST' })).json();
+        if (!r.ok) { status.textContent = '⚠️ ' + (r.error || 'failed'); return; }
+        status.textContent = r.ingested ? `Ingested ${r.ingested} new attachment(s).`
+                                        : (r.note || 'No new invoices found.');
+        // refresh documents so any new email docs show up
+        try {
+          const docs = await (await fetch('/api/documents')).json();
+          if (Array.isArray(docs)) state.documents = docs;
+        } catch (_) {}
+      } catch (err) { status.textContent = '⚠️ ' + err.message; }
+    });
+    const PROFILE_UL = { emails: 'profile-emails', whatsapp: 'profile-whatsapp', companies: 'profile-companies' };
+    function renderProfileList(kind, values) {
+      const ul = document.getElementById(PROFILE_UL[kind]);
+      ul.innerHTML = '';
+      if (!values.length) {
+        const li = document.createElement('li');
+        li.style.background = 'transparent'; li.style.border = 'none'; li.style.padding = '0';
+        li.innerHTML = '<span class="empty-note">None added yet.</span>';
+        ul.appendChild(li);
+        return;
+      }
+      values.forEach(v => {
+        const li = document.createElement('li');
+        const span = document.createElement('span'); span.textContent = v;
+        const rm = document.createElement('button');
+        rm.className = 'remove-btn'; rm.type = 'button'; rm.textContent = 'Remove';
+        rm.addEventListener('click', () => removeProfileEntry(kind, v));
+        li.append(span, rm);
+        ul.appendChild(li);
+      });
+    }
+    async function addProfileEntry(kind, value) {
+      value = (value || '').trim();
+      if (!value) return;
+      try {
+        const res = await fetch('/api/profile', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind, value }),
+        });
+        const p = await res.json();
+        if (!res.ok) throw new Error(p.error || 'add failed');
+        renderAllProfile(p);
+      } catch (err) { alert('Failed to add: ' + err.message); }
+    }
+    async function removeProfileEntry(kind, value) {
+      try {
+        const res = await fetch('/api/profile?kind=' + encodeURIComponent(kind) +
+                                '&value=' + encodeURIComponent(value), { method: 'DELETE' });
+        const p = await res.json();
+        renderAllProfile(p);
+      } catch (err) { alert('Failed to remove: ' + err.message); }
+    }
+    document.getElementById('profile-email-add').addEventListener('click', () => {
+      const inp = document.getElementById('profile-email-input');
+      addProfileEntry('emails', inp.value); inp.value = '';
+    });
+    document.getElementById('profile-whatsapp-add').addEventListener('click', () => {
+      const inp = document.getElementById('profile-whatsapp-input');
+      addProfileEntry('whatsapp', inp.value); inp.value = '';
+    });
+    document.getElementById('profile-company-add').addEventListener('click', () => {
+      const inp = document.getElementById('profile-company-input');
+      addProfileEntry('companies', inp.value); inp.value = '';
     });
 
     // Documents
@@ -1011,6 +2270,36 @@
         showErr('Network error: ' + err.message);
       }
     });
+
+    // --- New-document toast + polling (WhatsApp / email ingestion) ---
+    let toastTimer = null;
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      if (!t) return;
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 3000);  // 3 seconds
+    }
+
+    let seenDocIds = null;
+    async function pollDocuments() {
+      if (!state.user) return;   // only while logged in
+      let docs;
+      try { docs = await (await fetch('/api/documents')).json(); } catch (_) { return; }
+      if (!Array.isArray(docs)) return;
+      if (seenDocIds === null) { seenDocIds = new Set(docs.map(d => d.id)); state.documents = docs; return; }
+      const fresh = docs.filter(d => !seenDocIds.has(d.id));
+      const ingested = fresh.filter(d => d.source === 'whatsapp' || d.source === 'email');
+      docs.forEach(d => seenDocIds.add(d.id));
+      state.documents = docs;
+      if (ingested.length) showToast('New Document received for OCR');
+      if (fresh.length) {
+        if (state.route === '#/documents') renderDocumentsTable();
+        else if (TYPE_ROUTES[state.route]) renderTypeList(TYPE_ROUTES[state.route], state.route);
+      }
+    }
+    setInterval(pollDocuments, 5000);
 
     window.addEventListener('hashchange', () => {
       state.route = window.location.hash || '#/login';

@@ -12,3 +12,8 @@ set_keys.sh.bak
 # User-uploaded documents and their extracted results (personal data)
 uploads/
 results/
+# Personal profile + saved per-type records (personal data)
+profile.json
+saved_*.csv
+# Local editor / preview config
+.claude/
