@@ -1,0 +1,90 @@
+You convert the Markdown transcription of ONE Indian GST credit / debit note (a Sales Return or Purchase Return) into JSON.
+The Markdown is already a faithful, structured transcript — trust it. I have sent images use this if u r confused , the markdown is from this image dont extract again only visual reference
+
+
+RULES
+- Extract values exactly as written. Do NOT invent or calculate. 'amount' is copied as
+  printed, never recomputed; you may only derive a missing 'quantity' or 'rate' from amount.
+- Money → numbers (strip currency symbols and thousands separators); 'amount_in_words'
+  stays a string.
+- Dates (note_date, original_invoice_date) → dd-mm-yyyy with a 4-digit year; if genuinely
+  ambiguous, keep as printed.
+- Use empty values a s a value for json key when a field is absent on the document.
+- Output ONLY the JSON object below.
+
+{
+"note_type": "", "note_number": "", "note_date": "",
+"original_invoice_number": "", "original_invoice_date": "",
+"e_invoice": { "irn": null, "ack_no": null, "ack_date": null },
+"seller": { "name": "", "trade_name": null, "address": "", "city": "", "pincode": "",
+  "state": "", "country": "", "gstin": null, "pan": null, "udyam_msme_no": null,
+  "tel": null, "mobile": null, "email": null, "authorised_signatory": null,
+  "bank": { "bank_name": null, "account_holder": null, "account_number": null,
+    "branch": null, "ifsc": null } },
+"buyer": { "name": "", "address": "", "city": "", "pincode": "", "state": "",
+  "country": "", "gstin": null, "mobile": null },
+"consignee": { "name": null, "address": null, "city": null, "pincode": null,
+  "state": null, "country": null, "gstin": null, "mobile": null },
+"place_of_supply": null, "reverse_charge": null, "reference_no": null,
+"transport": { "mode": null, "carrier": null, "vehicle_no": null,
+  "e_way_bill_no": null, "gr_rr_no": null, "station": null },
+"line_items": [ { "sno": 1, "item_name": "", "description_detailed": "",
+  "hsn_sac": null, "quantity": 0, "unit": null, "list_price": null, "discount": null,
+  "rate": 0, "rate_incl_of_tax": null, "tax_rate": null, "tax_amount":null, "amount": 0 } ],
+"other_charges": [ { "description": "", "amount": 0 } ],
+"summary": { "sub_total": 0, "round_off": null, "grand_total": 0, "amount_in_words": "" }
+}
+
+
+JSON OBJECT FIELD MEANINGS
+- note_type: the printed document type (Credit Note, Debit Note, Sales Return, Purchase Return, etc.).
+- note_number: the credit / debit note number.
+- note_date: the date the note was issued.
+- original_invoice_number: the original invoice / bill number this note reverses or adjusts.
+- original_invoice_date: that original invoice's date (distinct from note_date).
+- e_invoice.irn: the 64-character e-invoice Invoice Reference Number hash.
+- e_invoice.ack_no / ack_date: e-invoice acknowledgement number and date.
+- seller: the party that ISSUED the note.
+    name (legal business name),
+    trade_name (brand name if different),
+    address/city/pincode/state/country (see convention),
+    gstin (15-char GST id),
+    pan (10-char PAN), 
+    udyam_msme_no (Udyam/MSME reg no.), tel (landline),
+    mobile (mobile no.), 
+    email, 
+    authorised_signatory (the signatory person's name),
+    bank.bank_name, 
+    bank.account_holder (a person/firm name), 
+    bank.account_number (digits),
+    bank.branch,
+    bank.ifsc (11-char IFSC code).
+- buyer: the party the note is issued to (Bill-To) — name, address block, gstin, mobile.
+- consignee: the Ship-To party. Populate ONLY if a separate Ship-To block exists that
+    differs from the buyer; otherwise every consignee field is null.
+- place_of_supply: the Place of Supply state.
+- reverse_charge: reverse-charge (RCM) applicability, as printed (Yes/No/Y/N/NA).
+- reference_no: a PO / buyer-order reference number.
+- transport.mode: medium word only (Road/Rail/Air/Ship).
+- transport.carrier: transporter/courier name.
+- transport.vehicle_no / e_way_bill_no / gr_rr_no (GR/RR/LR no.) / station (destination).
+- line_items[]: one object per goods/service line.
+    sno (serial no.), item_name (the item's primary name/label),
+    description_detailed (extra sub-line description, else ""),
+    hsn_sac (HSN/SAC code as a string, preserving leading zeros),
+    quantity Number of items
+    unit (unit of measure, e.g. PCS/BOX/KGS),
+    list_price (catalogue/MRP, only when a separate net rate also exists),
+    discount (line discount: "%" string if a percentage, plain number if rupees),
+    rate (net price per unit, before tax and after discount),
+    rate_incl_of_tax (a tax-inclusive per-unit rate, only if the note shows one),
+    tax_rate (the items tax column in percentage, could be a single column called tax or igst or similar, can also be 2 columns in the specific case of cgst and sgst. Only one column data to be fetched),
+     tax_amount(the items tax column amount, could be a single column called tax or igst or similar, can also be 2 columns in the specific case of cgst and sgst. Only one column data to be fetched)
+    amount (the line total, exactly as printed).
+
+- other_charges[]: always a voucher level property added to line item table below the items if available. Can also be placed below the item table before th total is printed. For example - Freight, Packing, Loading, Insurance, CGST, IGST, SGST etc.
+    each as {description, amount}.
+- summary.sub_total: the taxable value (pre-tax base).
+- summary.round_off: the rounding adjustment.
+- summary.grand_total: the final credit / payable amount.
+- summary.amount_in_words: the grand total spelled out in words.

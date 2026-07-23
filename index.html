@@ -191,6 +191,16 @@
     .pipeline-status.show { display: flex; }
     .pipeline-status.is-error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
     .pipeline-status.is-done { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+    /* GPT QA validation report panel (validator mode) */
+    .doc-validation { display: none; margin-bottom: 1rem; border-radius: 8px;
+      padding: .8rem .95rem; font-size: .9rem; border: 1px solid transparent; }
+    .doc-validation.show { display: block; }
+    .doc-validation.ok  { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+    .doc-validation.bad { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .doc-validation .dv-head { font-weight: 700; margin-bottom: .35rem; }
+    .doc-validation ul { margin: .35rem 0 0; padding-left: 1.1rem; }
+    .doc-validation li { margin: .2rem 0; }
+    .doc-validation .dv-field { font-weight: 600; }
     .pipeline-spinner {
       width: 15px; height: 15px; border: 2px solid #bfdbfe; border-top-color: #1d4ed8;
       border-radius: 50%; animation: spin 0.7s linear infinite; flex: 0 0 auto;
@@ -569,6 +579,7 @@
           </div>
           <div class="doc-form-pane">
             <div id="doc-pipeline-status" class="pipeline-status"></div>
+            <div id="doc-validation" class="doc-validation"></div>
             <form id="doc-form" autocomplete="off">
               <div id="doc-form-body"></div>
               <div class="row" style="margin-top:1.25rem;">
@@ -786,11 +797,12 @@
         <div id="ocr-modal-pdf" class="ocr-modal-pdf doc-pdf-holder"></div>
         <div class="ocr-modal-right">
           <div class="modal-tabs">
-            <button class="modal-tab active" type="button" data-tab="ocr">OCR</button>
+            <button class="modal-tab active" type="button" data-tab="ocr">Markdown</button>
             <button class="modal-tab" type="button" data-tab="qwen">Qwen</button>
-            <button class="modal-tab" type="button" data-tab="gpt">GPT</button>
+            <button class="modal-tab" type="button" data-tab="gpt">Validation</button>
           </div>
           <div id="ocr-modal-step" class="modal-step"></div>
+          <div id="ocr-modal-meta" class="modal-meta"></div>
           <pre id="ocr-modal-body" class="modal-body"></pre>
         </div>
       </div>
@@ -864,49 +876,39 @@
         consignee: { name: '', address: '', city: '', pincode: '', state: '', country: '', gstin: '', mobile: '' },
         transport: { mode: '', carrier: '', vehicle_no: '', e_way_bill_no: '', gr_rr_no: '', station: '' },
         line_items: [{
-          sno: '', description: '', description_detailed: '', hsn_sac: '', quantity: '',
-          unit: '', list_price: '', discount: '', rate: '', rate_incl_of_tax: '', gst_rate: '', amount: '',
+          sno: '', item_name: '', description_detailed: '', hsn_sac: '', quantity: '',
+          unit: '', list_price: '', discount: '', rate: '', rate_incl_of_tax: '',
+          tax_rate: '', tax_amount: '', amount: '',
         }],
         other_charges: [{ description: '', amount: '' }],
         summary: { sub_total: '', round_off: '', grand_total: '', amount_in_words: '' },
       },
       creditDebit: {
-        credit_note_number: '', credit_note_date: '', notes: '', reference_number: '',
-        reference_no: '', subject: '', place_of_supply: '', reverse_charge: '',
+        note_type: '', note_number: '', note_date: '',
+        original_invoice_number: '', original_invoice_date: '',
+        place_of_supply: '', reverse_charge: '', reference_no: '',
         e_invoice: { irn: '', ack_no: '', ack_date: '' },
-        original_voucher: { original_voucher_number: '', original_voucher_date: '' },
         seller: {
           name: '', trade_name: '', address: '', city: '', pincode: '', state: '',
           country: '', gstin: '', pan: '', udyam_msme_no: '', tel: '', mobile: '',
           email: '', authorised_signatory: '',
           bank: { bank_name: '', account_holder: '', account_number: '', branch: '', ifsc: '' },
         },
-        billing_details: { name: '', gstin: '', mobile: '', address: '', city: '', pincode: '', state: '', country: '' },
-        shipping_details: { name: '', gstin: '', mobile: '', address: '', city: '', pincode: '', state: '', country: '' },
-        transport: {
-          mode: '', transporter: '', vehicle_no: '', transporter_doc_no: '',
-          transporter_doc_date: '', e_way_bill_no: '', gr_rr_no: '', station: '',
-        },
+        buyer: { name: '', address: '', city: '', pincode: '', state: '', country: '', gstin: '', mobile: '' },
+        consignee: { name: '', address: '', city: '', pincode: '', state: '', country: '', gstin: '', mobile: '' },
+        transport: { mode: '', carrier: '', vehicle_no: '', e_way_bill_no: '', gr_rr_no: '', station: '' },
         line_items: [{
-          sno: '', item_description: '', description_detailed: '', account: '', hsn_sac: '',
-          quantity: '', unit: '', list_price: '', unit_price: '', rate_incl_of_tax: '',
-          disc: '', tax_percent: '', amount: '', sub_total: '',
+          sno: '', item_name: '', description_detailed: '', hsn_sac: '', quantity: '',
+          unit: '', list_price: '', discount: '', rate: '', rate_incl_of_tax: '',
+          tax_rate: '', tax_amount: '', amount: '',
         }],
         other_charges: [{ description: '', amount: '' }],
-        tax_summary: [{ tax_rate: '', taxable_amount: '', cgst: '', sgst: '', igst: '' }],
-        sundry_details: {
-          cgst: '', cgst_itc_none: '', sgst: '', sgst_itc_none: '', igst: '',
-          igst_export_sez: '', igst_itc_none: '', cess_on_gst: '', cess_on_gst_itc_none: '',
-          add_cess_on_gst: '', add_cess_on_gst_itc_none: '', discount: '',
-          freight_forwarding_charges: '', rounded_off_plus: '', rounded_off_minus: '',
-          tcs: '', tax_collected_at_source: '', tds_on_payment_purchase: '', tds_tcs: '',
-        },
-        footer: { total: '', amount_in_words: '' },
+        summary: { sub_total: '', round_off: '', grand_total: '', amount_in_words: '' },
       },
       receipt: {
         receipt_details: {
           receipt_type: '', voucher_series: '', receipt_number: '', receipt_date: '',
-          receipt_time: '', table_no: '', party_size: '', server: '', account_name: '',
+          receipt_time: '', account_name: '',
           on_account_balance: '', payment_mode: '', instrument_no: '', reference_number: '',
           amount_received: '', amount_in_words: '', bank_charges: '', tax_deducted: '',
           total_pending: '', total_adjustable_amount: '', adjust_on_account: '',
@@ -1044,7 +1046,7 @@
       await loadFromServer();                       // current OCR status before deciding
       if (state.route !== '#/documents') return;
       if (_anyOcrInProgress()) {
-        showOverlay('Running OCR — preparing documents…');
+        showOverlay('Reading documents (Qwen VLM) — preparing…');
         try {
           while (state.route === '#/documents' && _anyOcrInProgress()) {
             await new Promise(r => setTimeout(r, 2000));
@@ -1250,15 +1252,43 @@
     // tab is rendered into the body. Same modal is used by Save (live pipeline)
     // and by the Result button (stored results).
     const modalContent = { ocr: '', qwen: '', gpt: '' };
+    // Per-tab metrics line (real token usage + measured time from the backend).
+    const modalMeta = { ocr: '', qwen: '', gpt: '' };
     let activeTab = 'ocr';
+
+    // Format a backend meta object into a one-line metrics string. Never guesses:
+    // if the server didn't return token usage, shows "tokens: n/a".
+    function fmtMeta(m) {
+      if (!m) return '';
+      const nf = n => (n === null || n === undefined) ? '?' : Number(n).toLocaleString('en-US');
+      const parts = [];
+      if (m.seconds !== null && m.seconds !== undefined) parts.push('⏱ ' + Number(m.seconds).toFixed(2) + 's');
+      if (m.total_tokens == null && m.prompt_tokens == null && m.completion_tokens == null) {
+        parts.push('tokens: n/a');
+      } else {
+        parts.push('🔢 ' + nf(m.total_tokens) + ' tokens (' + nf(m.prompt_tokens) + ' in / ' + nf(m.completion_tokens) + ' out)');
+      }
+      return parts.join('   ·   ');
+    }
 
     function renderModalTab() {
       document.querySelectorAll('.modal-tab').forEach(b =>
         b.classList.toggle('active', b.dataset.tab === activeTab));
       document.getElementById('ocr-modal-body').textContent = modalContent[activeTab] || '';
+      const me = document.getElementById('ocr-modal-meta');
+      if (me) {
+        const t = modalMeta[activeTab] || '';
+        me.textContent = t;
+        me.classList.toggle('show', !!t);
+      }
     }
     function setTabContent(tab, text) {
       modalContent[tab] = text;
+      if (tab === activeTab) renderModalTab();
+    }
+    // Store a tab's metrics from a backend meta object and re-render if active.
+    function setTabMeta(tab, meta) {
+      modalMeta[tab] = fmtMeta(meta);
       if (tab === activeTab) renderModalTab();
     }
     function openModal(title, initialTab) {
@@ -1277,15 +1307,16 @@
 
     // Save flow: run OCR -> Qwen -> GPT, filling each tab as it completes.
     async function runPipeline(id, docType) {
-      modalContent.ocr = '⏳ Running OCR…';
-      modalContent.qwen = '⏳ Waiting for OCR…';
-      modalContent.gpt = '⏳ Waiting for OCR…';
+      modalContent.ocr = '⏳ Reading document…';
+      modalContent.qwen = '⏳ Waiting for the document read…';
+      modalContent.gpt = '⏳ Waiting for the document read…';
+      modalMeta.ocr = modalMeta.qwen = modalMeta.gpt = '';
       openModal('Document Processing', 'ocr');
       const _pdoc = state.documents.find(d => d.id === id);
       showPdf(_pdoc ? _pdoc.file : '', 'ocr-modal-pdf');
 
-      // STEP 1 — OCR the document's file via PP-OCRv5.
-      setStep('Step 1 of 3 · Running OCR (PP-OCRv5)…');
+      // STEP 1 — read the document's file to Markdown via the Qwen VLM.
+      setStep('Step 1 of 3 · Reading document (Qwen VLM)…');
       let ocrText = '';
       try {
         const res = await fetch('/api/documents/ocr', {
@@ -1293,10 +1324,11 @@
           body: JSON.stringify({ id }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || data.error) { setStep(''); setTabContent('ocr', '⚠️ OCR failed: ' + (data.error || ('HTTP ' + res.status))); return; }
+        if (!res.ok || data.error) { setStep(''); setTabContent('ocr', '⚠️ Document read failed: ' + (data.error || ('HTTP ' + res.status))); return; }
         ocrText = data.text || '';
         setTabContent('ocr', ocrText || '(No text detected.)');
-      } catch (err) { setStep(''); setTabContent('ocr', '⚠️ Could not reach the server (OCR): ' + err.message); return; }
+        setTabMeta('ocr', data.meta);
+      } catch (err) { setStep(''); setTabContent('ocr', '⚠️ Could not reach the server (document read): ' + err.message); return; }
 
       // STEP 2 — Qwen extraction with the per-document-type system prompt.
       setStep('Step 2 of 3 · Extracting with Qwen (' + docType + ')…');
@@ -1310,21 +1342,23 @@
         setTabContent('qwen', (!res.ok || data.error)
           ? '⚠️ Qwen extraction failed: ' + (data.error || ('HTTP ' + res.status))
           : (data.response && data.response.trim() ? data.response : '(Qwen returned an empty response.)'));
+        setTabMeta('qwen', data.meta);
       } catch (err) { setTabContent('qwen', '⚠️ Could not reach the server (Qwen): ' + err.message); }
 
-      // STEP 3 — GPT-4.1-mini auditor: its own per-type GPT prompt, fed the OCR + Qwen output.
-      setStep('Step 3 of 3 · Extracting with GPT-4.1-mini…');
-      setTabContent('gpt', '⏳ Extracting with GPT-4.1-mini…');
+      // STEP 3 — code-level validation of the Qwen JSON (replaces the GPT auditor).
+      setStep('Step 3 of 3 · Validating…');
+      setTabContent('gpt', '⏳ Validating…');
       try {
-        const res = await fetch('/api/documents/extract-gpt', {
+        const res = await fetch('/api/documents/validate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, docType, text: ocrText }),
+          body: JSON.stringify({ id }),
         });
         const data = await res.json().catch(() => ({}));
         setTabContent('gpt', (!res.ok || data.error)
-          ? '⚠️ GPT extraction failed: ' + (data.error || ('HTTP ' + res.status))
-          : (data.response && data.response.trim() ? data.response : '(GPT returned an empty response.)'));
-      } catch (err) { setTabContent('gpt', '⚠️ Could not reach the server (GPT): ' + err.message); }
+          ? '⚠️ Validation failed: ' + (data.error || ('HTTP ' + res.status))
+          : validationToText(data.report));
+        setTabMeta('gpt', '');
+      } catch (err) { setTabContent('gpt', '⚠️ Could not reach the server (validation): ' + err.message); }
 
       setStep('');  // pipeline complete — hide loader
     }
@@ -1332,6 +1366,7 @@
     // Result button: load the stored OCR/Qwen/GPT results into the tabbed popup.
     async function showResult(id) {
       modalContent.ocr = modalContent.qwen = modalContent.gpt = '(loading…)';
+      modalMeta.ocr = modalMeta.qwen = modalMeta.gpt = '';
       openModal('Document Result', 'ocr');
       const rdoc = state.documents.find(d => d.id === id);
       showPdf(rdoc ? rdoc.file : '', 'ocr-modal-pdf');   // PDF on the left, like Create
@@ -1339,9 +1374,23 @@
       try {
         const res = await fetch('/api/documents/result?id=' + encodeURIComponent(id));
         const d = await res.json().catch(() => ({}));
-        setTabContent('ocr', d.ocr || '(No OCR output yet — click Save to process this document.)');
+        setTabContent('ocr', d.ocr || '(No Markdown yet — click Save to process this document.)');
         setTabContent('qwen', d.qwen || '(No Qwen output yet — click Save to process this document.)');
-        setTabContent('gpt', d.gpt || '(No GPT output yet — click Save to process this document.)');
+        setTabMeta('ocr', d.ocr_meta);
+        setTabMeta('qwen', d.qwen_meta);
+        setTabMeta('gpt', '');
+        // Validation report: use the stored one if present, else compute it now.
+        let report = null;
+        try { report = d.validation ? JSON.parse(d.validation) : null; } catch (_) { report = null; }
+        if (!report && d.qwen) {
+          const vr = await fetch('/api/documents/validate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+          }).then(r => r.json()).catch(() => ({}));
+          report = vr.report || null;
+        }
+        setTabContent('gpt', report ? validationToText(report)
+          : '(No validation yet — click Save to process this document.)');
       } catch (err) {
         setTabContent('ocr', '⚠️ Could not load results: ' + err.message);
       }
@@ -1445,6 +1494,7 @@
       saveBtn.disabled = false; saveBtn.textContent = 'Save';
       setPipelineStatus('');
       hideOverlay();
+      renderValidation(null);   // clear any prior validation report
       renderDocForm(type);   // always start from an empty schema form
 
       const docId = opts.docId ? parseInt(opts.docId, 10) : null;
@@ -1536,6 +1586,57 @@
     // Run (or reuse cached) OCR→Qwen→GPT for a document, then pre-fill the form
     // from the GPT result (falling back to Qwen). On failure: show which step
     // failed + a Retry, and leave the form empty so the user can type manually.
+    // Render the GPT QA validation report into the two-pane panel. null hides it.
+    // Format a validation report as plain text for the modal's Validation tab.
+    function validationToText(report) {
+      if (!report || typeof report !== 'object' || report.is_valid === undefined)
+        return '(No validation available.)';
+      const errs = Array.isArray(report.errors) ? report.errors : [];
+      if (report.is_valid || !errs.length) return '✓ Validated — no issues found.';
+      const lines = ['⚠ ' + errs.length + ' issue' + (errs.length === 1 ? '' : 's') + ' found:', ''];
+      errs.forEach(e => {
+        const bits = [];
+        if (e && e.issue) bits.push(String(e.issue));
+        if (e && e.expected !== undefined && e.expected !== '') bits.push('expected ' + JSON.stringify(e.expected));
+        if (e && e.actual !== undefined && e.actual !== '') bits.push('got ' + JSON.stringify(e.actual));
+        lines.push('• ' + ((e && e.field) ? e.field + ' — ' : '') + bits.join(' — '));
+      });
+      return lines.join('\n');
+    }
+
+    function renderValidation(report) {
+      const el = document.getElementById('doc-validation');
+      if (!el) return;
+      if (!report || typeof report !== 'object' || report.is_valid === undefined) {
+        el.className = 'doc-validation'; el.innerHTML = ''; return;
+      }
+      const ok = report.is_valid === true || report.is_valid === 'true';
+      const errors = Array.isArray(report.errors) ? report.errors : [];
+      el.className = 'doc-validation show ' + (ok ? 'ok' : 'bad');
+      el.innerHTML = '';
+      el.appendChild(_el('div', 'dv-head',
+        ok ? '✓ Validated — no issues found'
+           : `⚠ Validation found ${errors.length} issue${errors.length === 1 ? '' : 's'}`));
+      if (report.summary) el.appendChild(_el('div', null, String(report.summary)));
+      if (!ok && errors.length) {
+        const ul = document.createElement('ul');
+        errors.forEach(e => {
+          const li = document.createElement('li');
+          li.appendChild(_el('span', 'dv-field', (e && e.field) ? (e.field + ': ') : ''));
+          const bits = [];
+          if (e && e.issue) bits.push(String(e.issue));
+          if (e && e.expected !== undefined && e.expected !== '') bits.push('expected ' + JSON.stringify(e.expected));
+          if (e && e.actual !== undefined && e.actual !== '') bits.push('got ' + JSON.stringify(e.actual));
+          li.appendChild(document.createTextNode(bits.join(' — ')));
+          ul.appendChild(li);
+        });
+        el.appendChild(ul);
+      }
+    }
+
+    // Two-pane create: fill the form from the Qwen JSON (source of truth for the
+    // form), then run the GPT QA validation (a report, not a correction) and show
+    // it in the validation panel. Validator mode.
     async function loadExtractionIntoForm(docId, type) {
       const post = (url, body) => fetch(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1543,46 +1644,51 @@
       }).then(async r => { const d = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, d }; });
 
       setPipelineStatus('');
+      renderValidation(null);
       showOverlay('Loading…');
       let cached = {};
       try { cached = await fetch('/api/documents/result?id=' + docId).then(r => r.json()); } catch (_) { cached = {}; }
 
-      // If we already have a final GPT (or Qwen) extraction, use it — no re-run.
-      const finalCached = parseModelJson(cached.gpt) || parseModelJson(cached.qwen);
-      if (finalCached) {
-        fillDocForm(finalCached);
+      // If we already have a Qwen extraction, fill from it and show any cached
+      // validation report — no re-run.
+      const cachedQwen = parseModelJson(cached.qwen);
+      if (cachedQwen) {
+        fillDocForm(cachedQwen);
         hideOverlay();
         setPipelineStatus('Loaded from a previous extraction — review and edit below.', 'is-done');
+        post('/api/documents/validate', { id: docId }).then(r => renderValidation(r.d && r.d.report));
         return;
       }
 
       try {
-        // STEP 1 — OCR (reuse cached text if present).
+        // STEP 1 — read document to Markdown via Qwen VLM (reuse cached text if present).
         let ocrText = cached.ocr || '';
         if (!ocrText) {
-          updateOverlay('Step 1 of 3 · Running OCR (PP-OCRv5)…');
+          updateOverlay('Step 1 of 3 · Reading document (Qwen VLM)…');
           const r = await post('/api/documents/ocr', { id: docId });
-          if (!r.ok || r.d.error) return failStep('OCR', r.d.error || ('HTTP ' + r.status), () => loadExtractionIntoForm(docId, type));
+          if (!r.ok || r.d.error) return failStep('Document read', r.d.error || ('HTTP ' + r.status), () => loadExtractionIntoForm(docId, type));
           ocrText = r.d.text || '';
         }
 
-        // STEP 2 — Qwen extraction (reuse cached if present).
-        if (!cached.qwen) {
-          updateOverlay('Step 2 of 3 · Extracting with Qwen…');
-          const r = await post('/api/documents/extract', { id: docId, docType: type, text: ocrText });
-          if (!r.ok || r.d.error) return failStep('Qwen', r.d.error || ('HTTP ' + r.status), () => loadExtractionIntoForm(docId, type));
-        }
-
-        // STEP 3 — GPT-4.1-mini auditor (final).
-        updateOverlay('Step 3 of 3 · Auditing with GPT-4.1-mini…');
-        const r = await post('/api/documents/extract-gpt', { id: docId, docType: type, text: ocrText });
-        if (!r.ok || r.d.error) return failStep('GPT', r.d.error || ('HTTP ' + r.status), () => loadExtractionIntoForm(docId, type));
-
-        const parsed = parseModelJson(r.d.response) || parseModelJson(cached.qwen);
-        if (!parsed) return failStep('GPT', 'could not parse the model output as JSON', () => loadExtractionIntoForm(docId, type));
+        // STEP 2 — Qwen extraction → fills the form.
+        updateOverlay('Step 2 of 3 · Extracting with Qwen…');
+        const rq = await post('/api/documents/extract', { id: docId, docType: type, text: ocrText });
+        if (!rq.ok || rq.d.error) return failStep('Qwen', rq.d.error || ('HTTP ' + rq.status), () => loadExtractionIntoForm(docId, type));
+        const parsed = parseModelJson(rq.d.response);
+        if (!parsed) return failStep('Qwen', 'could not parse the extracted JSON', () => loadExtractionIntoForm(docId, type));
         fillDocForm(parsed);
-        hideOverlay();
+        hideOverlay();   // form is ready; validation runs next without blocking edits
+        setPipelineStatus('Extraction complete — validating…');
+
+        // STEP 3 — code-level validation (a report, not a correction). Non-fatal:
+        // the form is already filled from the Qwen JSON and is never overwritten.
+        const rg = await post('/api/documents/validate', { id: docId });
+        if (!rg.ok || rg.d.error) {
+          setPipelineStatus('Extraction complete — review and edit below. (validation unavailable: ' + (rg.d.error || ('HTTP ' + rg.status)) + ')', 'is-done');
+          return;
+        }
         setPipelineStatus('Extraction complete — review and edit below.', 'is-done');
+        renderValidation(rg.d.report);
       } catch (err) {
         failStep('pipeline', err.message, () => loadExtractionIntoForm(docId, type));
       }
@@ -1654,7 +1760,7 @@
 
     // Derive a document name for a saved record when none came from a file.
     function deriveDocName(type, data) {
-      return (data.invoice_number || data.credit_note_number
+      return (data.invoice_number || data.note_number
         || (data.receipt_details && data.receipt_details.receipt_number) || '').toString().trim()
         || ('Untitled ' + (TYPE_LABELS[type] || type));
     }
@@ -2343,6 +2449,12 @@
       color: #1d4ed8; font-size: .9rem; font-weight: 600; background: #f8fafc;
     }
     .modal-step.show { display: flex; }
+    .modal-meta {
+      display: none; padding: .55rem 1.25rem; border-bottom: 1px solid #e5e7eb;
+      background: #f8fafc; color: #334155; font-size: .8rem; font-weight: 600;
+      letter-spacing: .2px; white-space: nowrap; overflow-x: auto;
+    }
+    .modal-meta.show { display: block; }
     .modal-tabs { display: flex; border-bottom: 1px solid #e5e7eb; }
     .modal-tab {
       flex: 1; background: transparent; border: none; border-radius: 0;

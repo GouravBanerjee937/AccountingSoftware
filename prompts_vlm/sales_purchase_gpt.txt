@@ -76,35 +76,14 @@ All number fields inside line items , other charges  and summary objects to be r
 
 ## Output Format (STRICT)
 
-Return JSON:
+Return ONLY this JSON object — a validation report, NOT the voucher itself:
+- errors.type: The type should represent the correct error category
 
-{
-"invoice_id": 0, "invoice_type": "", "invoice_number": "", "invoice_date": "",
-"invoice_due_date": "",
-"e_invoice": { "irn": null, "ack_no": null, "ack_date": null },
-"seller": { "name": "", "trade_name": null, "address": "", "city": "", "pincode": "",
-  "state": "", "country": "", "gstin": null, "pan": null, "udyam_msme_no": null,
-  "tel": null, "mobile": null, "email": null, "authorised_signatory": null,
-  "bank": { "bank_name": null, "account_holder": null, "account_number": null,
-    "branch": null, "ifsc": null } },
-"buyer": { "name": "", "address": "", "city": "", "pincode": "", "state": "",
-  "country": "", "gstin": null, "mobile": null },
-"consignee": { "name": null, "address": null, "city": null, "pincode": null,
-  "state": null, "country": null, "gstin": null, "mobile": null },
-"place_of_supply": null, "reverse_charge": null, "reference_no": null,
-"transport": { "mode": null, "carrier": null, "vehicle_no": null,
-  "e_way_bill_no": null, "gr_rr_no": null, "station": null },
-"line_items": [ { "sno": 1, "item_name": "", "description_detailed": "",
-  "hsn_sac": null, "quantity": 0, "unit": null, "list_price": null, "discount": null,
-  "rate": 0, "rate_incl_of_tax": null, "tax_rate": null, "tax_amount":null, "amount": 0 } ],
-"other_charges": [ { "description": "", "amount": 0 } ],
-"summary": { "sub_total": 0, "round_off": null, "grand_total": 0, "amount_in_words": "" }
-}
 {
   "is_valid": true/false,
   "errors": [
     {
-      "type": "Structural | Mapping | Accounting | Logical",
+      "type": "",
       "field": "field_name",
       "issue": "description",
       "expected": "expected value or rule",
@@ -120,4 +99,4 @@ Return JSON:
 Be strict and deterministic
 Do NOT assume missing data
 Do NOT fix the JSON, only validate
-Flag even small inconsistencies
+Flag all numeric value inconsistencies

@@ -1,0 +1,95 @@
+You convert the Markdown transcription of ONE Indian GST tax invoice into JSON.
+The Markdown is already a faithful, structured transcript — trust it. I have sent images use this if u r confused , the markdown is from this image dont extract again only visual reference
+
+
+RULES
+- Extract values exactly as written. Do NOT invent or calculate. 'amount' is copied as
+  printed, never recomputed; you may only derive a missing 'quantity' or 'rate' from amount.
+- Money → numbers (strip currency symbols and thousands separators); 'amount_in_words'
+  stays a string.
+- Dates (invoice_date, invoice_due_date) → dd-mm-yyyy with a 4-digit year; if genuinely
+  ambiguous, keep as printed.
+- Line items should not be populated from values in tax_tables 
+- Use empty values a s a value for json key when a field is absent on the document.
+- Output ONLY the JSON object below.
+
+{
+"invoice_id": 0, "invoice_type": "", "invoice_number": "", "invoice_date": "",
+"invoice_due_date": "",
+"e_invoice": { "irn": null, "ack_no": null, "ack_date": null },
+"seller": { "name": "", "trade_name": null, "address": "", "city": "", "pincode": "",
+  "state": "", "country": "", "gstin": null, "pan": null, "udyam_msme_no": null,
+  "tel": null, "mobile": null, "email": null, "authorised_signatory": null,
+  "bank": { "bank_name": null, "account_holder": null, "account_number": null,
+    "branch": null, "ifsc": null } },
+"buyer": { "name": "", "address": "", "city": "", "pincode": "", "state": "",
+  "country": "", "gstin": null, "mobile": null },
+"consignee": { "name": null, "address": null, "city": null, "pincode": null,
+  "state": null, "country": null, "gstin": null, "mobile": null },
+"place_of_supply": null, "reverse_charge": null, "reference_no": null,
+"transport": { "mode": null, "carrier": null, "vehicle_no": null,
+  "e_way_bill_no": null, "gr_rr_no": null, "station": null },
+"line_items": [ { "sno": 1, "item_name": "", "description_detailed": "",
+  "hsn_sac": null, "quantity": 0, "unit": null, "list_price": null, "discount": null,
+  "rate": 0, "rate_incl_of_tax": null, "tax_rate": null, "tax_amount":null, "amount": 0 } ],
+"other_charges": [ { "description": "", "amount": 0 } ],
+"tax_tables": [ { "cgst_percentage":null, "sgst_percentage":null, "igst_percentage": null, "cgst_amount":0, "sgst_amount":0, "igst_amount":0 } ],
+"summary": { "sub_total": 0, "round_off": null, "grand_total": 0, "amount_in_words": "" }
+}
+
+
+JSON OBJECT FIELD MEANINGS
+- invoice_id: internal placeholder, always 0 (not read from the document).
+- invoice_type: the printed document type (Tax Invoice, Bill of Supply, Proforma, etc.).
+- invoice_number: the invoice / bill number.
+- invoice_date: the date the invoice was issued.
+- invoice_due_date: the payment due date (distinct from invoice_date).
+- e_invoice.irn: the 64-character e-invoice Invoice Reference Number hash.
+- e_invoice.ack_no / ack_date: e-invoice acknowledgement number and date.
+- seller: the supplier/issuer of the invoice.
+    name (legal business name), trade_name (brand name if different),
+    address/city/pincode/state/country (see convention), gstin (15-char GST id),
+    pan (10-char PAN), udyam_msme_no (Udyam/MSME reg no.), tel (landline),
+    mobile (mobile no.), email, authorised_signatory (the signatory person's name),
+    bank.bank_name, bank.account_holder (a person/firm name), bank.account_number (digits),
+    bank.branch, bank.ifsc (11-char IFSC code).
+- buyer: the Bill-To party — name, address block, gstin, mobile.
+- consignee: the Ship-To party. Populate ONLY if a separate Ship-To block exists that
+    differs from the buyer; otherwise every consignee field is null.
+- place_of_supply: the Place of Supply state.
+- reverse_charge: reverse-charge (RCM) applicability, as printed (Yes/No/Y/N/NA).
+- reference_no: a PO / buyer-order reference number.
+- transport.mode: medium word only (Road/Rail/Air/Ship).
+- transport.carrier: transporter/courier name.
+- transport.vehicle_no / e_way_bill_no / gr_rr_no (GR/RR/LR no.) / station (destination).
+- line_items[]: one object per goods/service line.
+    sno (serial no.), item_name (the item's primary name/label),
+    description_detailed (extra sub-line description, else ""),
+    hsn_sac (HSN/SAC code as a string, preserving leading zeros),
+    quantity Number of items 
+    unit (unit of measure, e.g. PCS/BOX/KGS),
+    list_price (catalogue/MRP, only when a separate net rate also exists),
+    discount (line discount: "%" string if a percentage, plain number if rupees),
+    rate (net price per unit, before tax and after discount),
+    rate_incl_of_tax (a tax-inclusive per-unit rate, only if the invoice shows one),
+    tax_rate (the items tax column in percentage, could be a single column called tax or igst or similar, can also be 2 columns in the specific case of cgst and sgst. Only one column data to be fetched),
+     tax_amount(the items tax column amount, could be a single column called tax or igst or similar, can also be 2 columns in the specific case of cgst and sgst. Only one column data to be fetched)
+    amount (the line total, exactly as printed).
+    
+- tax_tables.cgst_percentage: the document-level CGST rate as a percentage NUMBER, from the
+    tax-summary / totals block (e.g. 9); null if not printed.
+- tax_tables.sgst_percentage: the document-level SGST/UTGST rate as a percentage NUMBER; null if not printed.
+- tax_tables.igst_percentage: the document-level IGST rate as a percentage NUMBER; null if not printed.
+- tax_tables.cgst_amount: the total CGST amount for the whole document (number); 0 if not printed.
+- tax_tables.sgst_amount: the total SGST/UTGST amount for the whole document (number); 0 if not printed.
+- tax_tables.igst_amount: the total IGST amount for the whole document (number); 0 if not printed.   
+- other_charges[]: always a voucher level property added to line item table below the items if available. Can also be placed below the item table before th total is printed. For example - Freight, Packing, Loading, Insurance, CGST, IGST, SGST etc.
+    each as {description, amount}. 
+- summary.sub_total: the taxable value (pre-tax base).
+- summary.round_off: the rounding adjustment.
+- summary.grand_total: the final payable amount.
+- summary.amount_in_words: the grand total spelled out in words.
+- cgst_percentage: the document-level CGST rate as a percentage NUMBER, from the
+    tax-summary / totals block (e.g. 9); null if not printed.
+
+

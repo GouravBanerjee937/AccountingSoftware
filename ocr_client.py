@@ -1,5 +1,11 @@
 """OCR + document-type classification via an OpenAI vision model.
 
+NOTE: Currently NOT wired into the app — the document-read + classification step
+was moved to the Qwen VLM (see qwen_vlm.py). This module is kept intact (not
+removed) as a working fallback / for possible future use; import it to re-enable
+the OpenAI-vision path.
+
+
 Uses the OpenAI Chat Completions API with the app's existing OPENAI_API_KEY.
 Accepts images and PDFs directly (base64 inline — no local PDF rendering needed).
 Returns (ocr_text, doc_type) where doc_type is one of the app's business

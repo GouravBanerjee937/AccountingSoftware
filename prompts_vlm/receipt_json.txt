@@ -1,0 +1,70 @@
+You convert the Markdown transcription of ONE receipt / payment voucher (money received or paid) into JSON.
+The Markdown is already a faithful, structured transcript — trust it. I have sent images use this if u r confused , the markdown is from this image dont extract again only visual reference
+
+
+RULES
+- Extract values exactly as written. Do NOT invent or calculate. Every 'amount' is copied
+  as printed, never recomputed.
+- A receipt has EITHER line_items (sales / POS goods) OR allocations (invoice-settlement
+  voucher) OR neither — fill whichever exists; the other stays [].
+- Money → numbers (strip currency symbols and thousands separators); 'amount_in_words' and
+  'on_account_balance' stay strings. total_receipt / amount_received = the final printed total.
+- Dates → dd-mm-yyyy with a 4-digit year; if genuinely ambiguous, keep as printed.
+  receipt_time is kept exactly as printed (keep am/pm, do not convert).
+- Use null as the value for a json key when a field is absent on the document.
+- Output ONLY the JSON object below.
+
+{
+"receipt_details": { "receipt_type": null, "voucher_series": null, "receipt_number": "",
+  "receipt_date": "", "receipt_time": null, "account_name": "", "on_account_balance": null, "payment_mode": null,
+  "instrument_no": null, "reference_number": null, "amount_received": 0,
+  "amount_in_words": null, "bank_charges": null, "tax_deducted": null,
+  "total_pending": null, "total_adjustable_amount": null, "adjust_on_account": null,
+  "amounts_refunded": null, "amount_in_excess": null, "notes": null },
+"issued_by": { "name": null, "address": null, "city": null, "pincode": null,
+  "state": null, "country": null, "gstin": null, "pan": null },
+"issued_to": { "name": null, "address": null, "city": null, "pincode": null,
+  "state": null, "country": null, "gstin": null, "pan": null },
+"line_items": [ { "sno": null, "item_description": "", "quantity": null,
+  "unit_price": null, "amount": 0 } ],
+"allocations": [ { "date": "", "ref_no": "", "due_date": null, "pending": 0,
+  "amount_adjusted": 0, "balance": 0, "settle": null } ],
+"footer": { "sub_total": null, "tax": null, "tip": null, "total_adjusted_receipt": null,
+  "remaining_adjustable_amount": null, "invoices_adjusted_count": null,
+  "total_receipt": 0 }
+}
+
+
+JSON OBJECT FIELD MEANINGS
+- receipt_details.receipt_type: the type/badge near the title (Advance, Payment Receipt…).
+- receipt_details.voucher_series: the series/book name.
+- receipt_details.receipt_number: the document's own number.
+- receipt_details.receipt_date: the receipt date.
+- receipt_details.receipt_time: the time as printed (keep am/pm, do not convert).
+- receipt_details.account_name: the customer/payer the money relates to
+    (= issued_to.name when a customer block exists; null for an unnamed POS payer).
+- receipt_details.on_account_balance: running balance, as a string incl. Cr/Dr.
+- receipt_details.payment_mode: Cash/UPI/Card/Cheque/ledger name.
+- receipt_details.instrument_no: cheque/UTR/transaction id.
+- receipt_details.reference_number: a separate external reference / order id.
+- receipt_details.amount_received: the amount received (number).
+- receipt_details.amount_in_words: that amount spelled out (string).
+- receipt_details.total_adjustable_amount: the total amount available to adjust / settle
+    against pending invoices (the "Total Adjustable Amount" shown on the voucher).
+- receipt_details.adjust_on_account: the "Adjust on account" flag — whether the money is
+    kept on account instead of settled against invoices (Yes/No/true-false as printed, else null).
+- receipt_details.bank_charges / tax_deducted / total_pending / amounts_refunded /
+    amount_in_excess: fill only if printed with a value.
+- receipt_details.notes: a genuine remark/narration (not signatures or marketing text).
+- issued_by: the issuer block (merchant/payer at the top) — name + address block + gstin, pan.
+- issued_to: the other party (customer/payee) — name + address block + gstin, pan.
+- line_items[]: itemised goods/dishes on a sales/POS receipt, all columns treated as
+    independent objects —
+    sno, item_description, quantity, unit_price (per-unit price when shown), amount (line total).
+    [] when there is no itemised list.
+- allocations[]: invoice-settlement rows on a receipt voucher —
+    date, ref_no, due_date, pending, amount_adjusted, balance, settle (status). [] if none.
+- footer.sub_total: pre-tax goods total (POS). footer.tax: tax total. footer.tip: tip/gratuity.
+- footer.total_adjusted_receipt / remaining_adjustable_amount / invoices_adjusted_count:
+    voucher-settlement totals.
+- footer.total_receipt: the final Total / Grand Total of the document.

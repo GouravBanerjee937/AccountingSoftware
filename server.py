@@ -346,6 +346,93 @@ def _parse_json_blob(s):
         return None
 
 
+def _merge_invoice_jsons(pages):
+    """Merge per-page extraction JSONs into one invoice document.
+
+    A large invoice is extracted one page at a time (to stay under the model's
+    output-token limit); this stitches the pages back together, matching how an
+    invoice is laid out:
+      - header fields (seller, buyer, invoice no/date, …) come from page 1,
+      - line_items are concatenated across every page, in page order,
+      - summary / tax_tables / other_charges come from the LAST page that has
+        them (the totals and tax breakup sit on the final page).
+    `pages` is a list in page order; entries that failed to parse (None) are
+    skipped so a single bad page can't discard the rest.
+    """
+    import validate  # reuse the tolerant number coercion
+    pages = [p for p in pages if isinstance(p, dict)]
+    if not pages:
+        return {}
+    merged = dict(pages[0])                      # header from the first page
+    items = []
+    for p in pages:
+        li = p.get('line_items')
+        if isinstance(li, list):
+            items.extend(li)
+    merged['line_items'] = items                 # every page's items, in order
+
+    def _amt(v):
+        return validate._num(v)
+
+    # summary: the last page that actually carries a grand_total
+    for p in reversed(pages):
+        s = p.get('summary')
+        if isinstance(s, dict) and _amt(s.get('grand_total')):
+            merged['summary'] = s
+            break
+    # tax_tables: the last page that carries any tax amount
+    for p in reversed(pages):
+        tt = p.get('tax_tables')
+        if isinstance(tt, list) and any(
+                _amt((t or {}).get('cgst_amount')) or _amt((t or {}).get('sgst_amount'))
+                or _amt((t or {}).get('igst_amount')) for t in tt):
+            merged['tax_tables'] = tt
+            break
+    # other_charges: the last page that carries any non-zero charge
+    for p in reversed(pages):
+        oc = p.get('other_charges')
+        if isinstance(oc, list) and any(_amt((t or {}).get('amount')) for t in oc):
+            merged['other_charges'] = oc
+            break
+    return merged
+
+
+def _extract_invoice(system, text):
+    """Run the Qwen extraction, splitting a page-delimited transcript into per-page
+    chunks that are extracted concurrently and merged. Returns (response, meta),
+    where response is a JSON string. Falls back to a single request when the
+    transcript is one page (small invoices, single images) — byte-for-byte the
+    original behaviour. Raises on transport errors (handled by the caller)."""
+    import qwen_client, qwen_vlm
+    from concurrent.futures import ThreadPoolExecutor
+    chunks = [c for c in text.split(qwen_vlm.PAGE_DELIM) if c.strip()]
+    if len(chunks) <= 1:
+        return qwen_client.chat_with_usage(system, text)
+
+    t0 = time.monotonic()
+    workers = min(len(chunks), 5)
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        results = list(ex.map(lambda c: qwen_client.chat_with_usage(system, c), chunks))
+    seconds = round(time.monotonic() - t0, 2)
+
+    parsed = [_parse_json_blob(r[0]) for r in results]
+    merged = _merge_invoice_jsons(parsed)
+    metas = [r[1] for r in results]
+
+    def _sum(k):
+        vals = [m.get(k) for m in metas if m.get(k) is not None]
+        return sum(vals) if vals else None
+    meta = {
+        'prompt_tokens': _sum('prompt_tokens'),
+        'completion_tokens': _sum('completion_tokens'),
+        'total_tokens': _sum('total_tokens'),
+        'seconds': seconds,
+        'pages_extracted': len(chunks),
+        'pages_parsed': sum(1 for p in parsed if p is not None),
+    }
+    return json.dumps(merged, ensure_ascii=False), meta
+
+
 def amount_from_obj(obj):
     """Pull a best-effort total out of an extracted/edited document object,
     covering the invoice, credit/debit note and receipt/payment schemas."""
@@ -362,16 +449,12 @@ def amount_from_obj(obj):
 
 
 def document_amount(doc_id):
-    """Best-effort total amount for a document, from its stored GPT/Qwen JSON."""
+    """Best-effort total amount for a document, from its stored Qwen JSON."""
     try:
         result = load_result(doc_id)
     except Exception:
         return None
-    for key in ('gpt', 'qwen'):
-        amt = amount_from_obj(_parse_json_blob(result.get(key)))
-        if amt is not None:
-            return amt
-    return None
+    return amount_from_obj(_parse_json_blob(result.get('qwen')))
 
 
 # ---- OCR status + background auto-OCR ----
@@ -401,11 +484,12 @@ def set_ocr_status(doc_id, status, error=''):
 
 
 def run_ocr_for(doc):
-    """OCR one document's file, storing text + status. Returns (ok, error)."""
+    """Read one document's file to Markdown via the Qwen VLM, storing the text +
+    status. Returns (ok, error)."""
     doc_id = doc['id']
     rel = doc.get('file', '')
     if not rel:
-        set_ocr_status(doc_id, 'failed', 'this document has no file to OCR')
+        set_ocr_status(doc_id, 'failed', 'this document has no file to read')
         return False, 'no file'
     fpath = os.path.join(DATA_DIR, rel)
     if not os.path.isfile(fpath):
@@ -413,15 +497,18 @@ def run_ocr_for(doc):
         return False, 'file not found'
     set_ocr_status(doc_id, 'running')
     try:
-        import ocr_client
+        import qwen_vlm
         companies = load_profile().get('companies', [])
-        text, suggested_type = ocr_client.ocr_and_classify(fpath, companies)
+        text, suggested_type, meta = qwen_vlm.transcribe_and_classify(fpath, companies)
     except Exception as e:
         set_ocr_status(doc_id, 'failed', str(e))
         return False, str(e)
+    # 'ocr' key kept for backward compatibility; it now holds the VLM Markdown.
     save_result_field(doc_id, 'ocr', text)
-    # The vision model also classifies the document type — store it as a
-    # suggestion the UI pre-selects (the user can still override it).
+    # Real token usage + measured time for this VLM read (shown in the UI).
+    save_result_field(doc_id, 'ocr_meta', meta)
+    # The VLM also classifies the document type — store it as a suggestion the
+    # UI pre-selects (the user can still override it).
     if suggested_type:
         save_result_field(doc_id, 'suggested_type', suggested_type)
     set_ocr_status(doc_id, 'ok')
@@ -652,8 +739,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._ocr_retry(data)
         if path == '/api/documents/extract':
             return self._extract_document(data)
-        if path == '/api/documents/extract-gpt':
-            return self._extract_gpt(data)
+        if path == '/api/documents/validate':
+            return self._validate_document(data)
         if path == '/api/documents/commit':
             return self._commit_documents(data)
         if path == '/api/documents/classify':
@@ -999,9 +1086,9 @@ class Handler(SimpleHTTPRequestHandler):
         if not os.path.isfile(fpath):
             return self._error(404, 'file not found')
         try:
-            import ocr_client
+            import qwen_vlm
             companies = load_profile().get('companies', [])
-            _text, suggested = ocr_client.ocr_and_classify(fpath, companies)
+            _text, suggested, _meta = qwen_vlm.transcribe_and_classify(fpath, companies)
         except Exception as e:
             # Best-effort: on any classifier error, return no suggestion (no popup).
             return self._json({'suggested_type': '', 'error': str(e)})
@@ -1054,7 +1141,7 @@ class Handler(SimpleHTTPRequestHandler):
         return self._json({'id': next_id, 'amount': rec['amount']}, status=201)
 
     def _ocr_document(self, data):
-        """Run OCR on a document's stored file via the PP-OCRv5 demo."""
+        """Read a document's stored file to Markdown via the Qwen VLM."""
         try:
             doc_id = int(data['id'])
         except (KeyError, ValueError, TypeError):
@@ -1065,7 +1152,8 @@ class Handler(SimpleHTTPRequestHandler):
         ok, err = run_ocr_for(doc)
         if not ok:
             return self._json({'text': None, 'error': f'OCR service error: {err}'})
-        return self._json({'text': load_result(doc_id).get('ocr', '')})
+        result = load_result(doc_id)
+        return self._json({'text': result.get('ocr', ''), 'meta': result.get('ocr_meta')})
 
     def _ocr_retry(self, data):
         """Re-queue a document for OCR (the background worker picks it up)."""
@@ -1082,18 +1170,10 @@ class Handler(SimpleHTTPRequestHandler):
         """Send OCR text to Qwen with a system prompt chosen by document type."""
         return self._llm_extract(data, engine='qwen')
 
-    def _extract_gpt(self, data):
-        """Audit the Qwen extraction with gpt-4.1-mini using the per-type GPT
-        prompt (user message = OCR + the stored Qwen output)."""
-        return self._llm_extract(data, engine='gpt')
-
     def _llm_extract(self, data, engine):
-        """Shared extraction. Pick the per-document-type system prompt for this
-        engine and run it, storing the result under its key.
-
-        Pipeline: OCR -> Qwen(qwen prompt + OCR) -> GPT(gpt prompt + OCR +
-        Qwen output). For the GPT (auditor) step the user message carries both
-        the original OCR and the Qwen draft so GPT can correct it."""
+        """Run the per-document-type Qwen extraction (Markdown -> JSON) and store
+        the result under its key. (The former GPT auditor step was replaced by the
+        code-level validator in validate.py — see _validate_document.)"""
         doc_type = str(data.get('docType', '') or '').strip()
         text = str(data.get('text', '') or '').strip()
         doc_id = data.get('id')
@@ -1106,20 +1186,36 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({'response': None,
                                'error': f'No {engine} system prompt configured for document type "{doc_type}".'})
         try:
-            if engine == 'gpt':
-                import gpt_client
-                # Auditor input: original OCR + the Qwen draft for this document.
-                qwen_output = str((load_result(doc_id) or {}).get('qwen', '') or '')
-                user = f'Original Data:\n{text}\n\nQwen Extraction:\n{qwen_output}'
-                response = gpt_client.chat(system, user)
-            else:
-                import qwen_client
-                response = qwen_client.chat(system, text)
+            # Chunked when the transcript spans multiple pages (a large invoice
+            # would otherwise overflow the output-token limit); single request
+            # otherwise. See _extract_invoice / _merge_invoice_jsons.
+            response, meta = _extract_invoice(system, text)
         except Exception as e:  # model unreachable / error — report, don't crash
             return self._json({'response': None, 'error': f'{engine} error: {e}'})
         if doc_id is not None:
             save_result_field(doc_id, engine, response)
-        return self._json({'response': response})
+            # Real token usage + measured time for this step (shown in the UI).
+            save_result_field(doc_id, f'{engine}_meta', meta)
+        return self._json({'response': response, 'meta': meta})
+
+    def _validate_document(self, data):
+        """Code-level validation of the extracted invoice JSON (replaces the GPT
+        auditor). Reads the stored Qwen JSON (or an inline 'json' payload), runs
+        validate.validate_invoice, stores the report, and returns it. The report
+        is display-only — it never changes the extracted values."""
+        import validate as _validate
+        doc_id = data.get('id')
+        raw = data.get('json')
+        if raw in (None, '') and doc_id is not None:
+            raw = (load_result(doc_id) or {}).get('qwen')
+        parsed = raw if isinstance(raw, dict) else _parse_json_blob(raw)
+        if parsed is None:
+            return self._json({'report': None,
+                               'error': 'no Qwen JSON available to validate'})
+        report = _validate.validate_invoice(parsed)
+        if doc_id is not None:
+            save_result_field(doc_id, 'validation', json.dumps(report))
+        return self._json({'report': report})
 
     def _whatsapp_webhook(self, body):
         """Inbound Twilio WhatsApp message. Saves any attached files (e.g. PDFs)
